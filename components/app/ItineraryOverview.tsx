@@ -296,6 +296,7 @@ export default function ItineraryOverview() {
       }
       setTripFormData(enrichTripData(defaultTrip))
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentTrip, days.length])
 
   const handleSaveTripDetails = async () => {

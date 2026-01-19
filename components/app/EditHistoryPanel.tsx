@@ -15,6 +15,7 @@ export default function EditHistoryPanel({ itineraryId }: EditHistoryPanelProps)
 
   useEffect(() => {
     void loadHistory()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [itineraryId])
 
   const loadHistory = async () => {

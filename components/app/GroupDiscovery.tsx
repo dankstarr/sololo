@@ -83,6 +83,7 @@ export default function GroupDiscovery() {
       setStartDate(currentTrip.dates.start || new Date().toISOString().split('T')[0])
       setEndDate(currentTrip.dates.end || getDefaultEndDate(currentTrip.dates.start))
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentTrip, action])
   
   // Get user-created groups (those not in demo data)

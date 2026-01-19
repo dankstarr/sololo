@@ -757,7 +757,7 @@ export default function TopLocationsPage() {
         setLoadingAroundMe(false)
       }
     },
-    [activeFilter, userLocation, searchRadius, locationName, extractCityName, isMajorCity, saveCityToSupabase]
+    [activeFilter, userLocation, searchRadius, locationName, extractCityName, isMajorCity, saveCityToSupabase, searchParams]
   )
 
   // Search for places around user's location when "Around me" is active
@@ -1003,7 +1003,7 @@ export default function TopLocationsPage() {
     }
 
     return sorted
-  }, [effectiveSearchQuery, activeFilter, sortBy, searchRadius, minReviews, maxReviews, selectedCategories, userLocation, aroundMeLocations, locationCoords, searchParams, discoverLocations])
+  }, [effectiveSearchQuery, activeFilter, sortBy, searchRadius, minReviews, maxReviews, selectedCategories, userLocation, aroundMeLocations, locationCoords, searchParams])
 
   // Toggle location save/bookmark
   const toggleLocationSave = useCallback((locationId: string, e: React.MouseEvent) => {

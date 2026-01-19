@@ -160,7 +160,6 @@ export default function AddressAutocomplete({
             '--tw-ring-color': themeColors?.primary || '#0284c7',
           } as React.CSSProperties & { '--tw-ring-color': string }}
           aria-autocomplete="list"
-          aria-expanded={showSuggestions}
           aria-haspopup="listbox"
         />
         {isLoading && (

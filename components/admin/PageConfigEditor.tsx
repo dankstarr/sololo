@@ -38,7 +38,8 @@ export default function PageConfigEditor() {
 
   // Load config on mount
   useEffect(() => {
-    loadConfig()
+    void loadConfig()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const loadConfig = useCallback(async () => {

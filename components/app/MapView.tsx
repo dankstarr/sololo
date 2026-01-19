@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
   Map,
@@ -394,22 +394,23 @@ export default function MapView() {
   }, [itinerary, currentTrip, selectedLocations])
 
   // Convert itinerary days to map format
-  const days = itinerary.length > 0 
-    ? itinerary.map((day, index) => ({
-        id: day.day,
-        name: `Day ${day.day}`,
-        color: index % 2 === 0 ? 'bg-blue-500' : 'bg-green-500',
-        locations: day.locations.map(locName => {
-          const location = selectedLocations.find(l => l.name === locName)
-          return {
-            name: locName,
-            category: location?.category || 'culture',
-            lat: location?.lat || 35.6762,
-            lng: location?.lng || 139.6503,
-          }
-        }),
-      }))
-    : [
+  const days = useMemo(() => {
+    return itinerary.length > 0 
+      ? itinerary.map((day, index) => ({
+          id: day.day,
+          name: `Day ${day.day}`,
+          color: index % 2 === 0 ? 'bg-blue-500' : 'bg-green-500',
+          locations: day.locations.map(locName => {
+            const location = selectedLocations.find(l => l.name === locName)
+            return {
+              name: locName,
+              category: location?.category || 'culture',
+              lat: location?.lat || 35.6762,
+              lng: location?.lng || 139.6503,
+            }
+          }),
+        }))
+      : [
         {
           id: 1,
           name: 'Day 1',
@@ -431,6 +432,7 @@ export default function MapView() {
           ],
         },
       ]
+  }, [itinerary, selectedLocations])
 
   const filteredShared = useMemo(() => {
     const q = itinerarySearch.trim().toLowerCase()
@@ -443,7 +445,7 @@ export default function MapView() {
   }, [itinerarySearch, sharedItineraries])
 
   // Helper function to check if a category matches the filters
-  const categoryMatchesFilter = (category?: string): boolean => {
+  const categoryMatchesFilter = useCallback((category?: string): boolean => {
     if (!category) return true // Show locations without category if any filter is enabled
     
     const cat = category.toLowerCase()
@@ -463,7 +465,7 @@ export default function MapView() {
     if (!anyFilterEnabled) return true
     
     return false
-  }
+  }, [filters])
 
   // Get all locations from all days with day information
   const allDaysLocations = useMemo(() => {
@@ -526,7 +528,7 @@ export default function MapView() {
     }
     
     return filtered
-  }, [selectedDay, showAllDays, allDaysLocations, filters, selectedLocationIds])
+  }, [selectedDay, showAllDays, allDaysLocations, selectedLocationIds, categoryMatchesFilter])
 
   // Filter locations based on selection state and category filters
   const filteredMapLocations = useMemo(() => {
@@ -546,7 +548,7 @@ export default function MapView() {
     }
     
     return filtered
-  }, [selectedDay, days, selectedLocationIds, showAllDays, allDaysLocations, filters])
+  }, [selectedDay, days, selectedLocationIds, showAllDays, allDaysLocations, categoryMatchesFilter])
 
   // Toggle location selection
   const toggleLocationSelection = (locationName: string) => {

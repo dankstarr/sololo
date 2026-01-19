@@ -22,6 +22,7 @@ export default function CollaboratorsPanel({ itineraryId, currentUserId }: Colla
 
   useEffect(() => {
     void loadCollaborators()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [itineraryId])
 
   const loadCollaborators = async () => {
