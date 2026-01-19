@@ -2,22 +2,22 @@
 
 ## API Key Configuration
 
-Your Gemini API key has been configured in the app config. To use it:
+Your Gemini API key should **never** be hardcoded in the repo. Use environment variables instead:
 
 1. **Set Environment Variable** (Recommended):
    Create a `.env.local` file in the root directory:
    ```env
-   NEXT_PUBLIC_GEMINI_API_KEY=AIzaSyBe2lUFOBEHhNkGce-lPPYy0-b48GyKu6o
+   NEXT_PUBLIC_GEMINI_API_KEY=your_gemini_api_key_here
    ```
 
-2. **Or Update Config Directly**:
-   Edit `config/app.config.ts` and set:
-   ```typescript
-   gemini: {
-     apiKey: 'AIzaSyBe2lUFOBEHhNkGce-lPPYy0-b48GyKu6o',
-     // ...
-   }
-   ```
+2. **Vercel / Production Setup**:
+   - In the Vercel project dashboard, go to **Settings → Environment Variables**
+   - Add:
+     - `NEXT_PUBLIC_GEMINI_API_KEY` = your real Gemini key
+   - Redeploy the project
+
+3. **Config Usage** (do **not** hardcode keys):
+   - The app reads the key from `process.env.NEXT_PUBLIC_GEMINI_API_KEY` in `config/gemini.ts`.
 
 ## Free Tier Limits
 

@@ -8,10 +8,10 @@
 - Updated all components to use Gemini instead of ChatGPT
 - Updated config file with Gemini settings
 
-### 2. ✅ API Key Configuration
-- Your Gemini API key is configured: `AIzaSyBe2lUFOBEHhNkGce-lPPYy0-b48GyKu6o`
-- Set in `config/app.config.ts` as fallback
-- Can also be set via `.env.local` (recommended for production)
+### 2. ✅ API Key Configuration (Secure)
+- Gemini API key is loaded from environment variables (no hardcoded keys in the repo)
+- Recommended: set `NEXT_PUBLIC_GEMINI_API_KEY` in `.env.local` for local dev
+- For production (Vercel): set `NEXT_PUBLIC_GEMINI_API_KEY` in Project → Settings → Environment Variables
 
 ### 3. ✅ Rate Limiting & Usage Tracking
 - Automatic rate limiting to prevent exceeding free tier
@@ -89,13 +89,11 @@ Configured conservative limits:
 npm install
 ```
 
-### 2. Set API Key (Optional)
+### 2. Set API Key
 Create `.env.local`:
 ```env
-NEXT_PUBLIC_GEMINI_API_KEY=AIzaSyBe2lUFOBEHhNkGce-lPPYy0-b48GyKu6o
+NEXT_PUBLIC_GEMINI_API_KEY=your_gemini_api_key_here
 ```
-
-Or use the key already set in `config/app.config.ts`
 
 ### 3. Access Admin Panel
 Navigate to `/admin` in your app to:
