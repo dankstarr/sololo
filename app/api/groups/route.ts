@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase/admin'
+import { supabaseCache, CACHE_TTL } from '@/lib/utils/supabase-cache'
 
 type CreateGroupBody = {
   userId?: string
@@ -15,6 +16,13 @@ type CreateGroupBody = {
 
 export async function GET() {
   try {
+    // Check cache first
+    const cacheKey = supabaseCache.key('groups:list', {})
+    const cached = supabaseCache.get<any[]>(cacheKey)
+    if (cached) {
+      return NextResponse.json(cached)
+    }
+
     const supabase = supabaseAdmin()
     const { data, error } = await supabase
       .from('groups')
@@ -24,19 +32,22 @@ export async function GET() {
 
     if (error) throw error
 
-    return NextResponse.json(
-      (data || []).map((g) => ({
-        id: g.id,
-        name: g.name ?? undefined,
-        destination: g.destination,
-        startDate: g.start_date,
-        endDate: g.end_date,
-        memberCount: g.member_count ?? 1,
-        maxMembers: g.max_members ?? 10,
-        interests: g.interests ?? [],
-        description: g.description ?? undefined,
-      }))
-    )
+    const result = (data || []).map((g) => ({
+      id: g.id,
+      name: g.name ?? undefined,
+      destination: g.destination,
+      startDate: g.start_date,
+      endDate: g.end_date,
+      memberCount: g.member_count ?? 1,
+      maxMembers: g.max_members ?? 10,
+      interests: g.interests ?? [],
+      description: g.description ?? undefined,
+    }))
+
+    // Cache the result
+    supabaseCache.set(cacheKey, result, CACHE_TTL.GROUPS_LIST)
+
+    return NextResponse.json(result)
   } catch (e) {
     console.error('Error listing groups:', e)
     return NextResponse.json([], { status: 200 })
@@ -84,6 +95,9 @@ export async function POST(req: NextRequest) {
         console.warn('Failed to create group member row:', e)
       }
     }
+
+    // Invalidate groups list cache since we added a new group
+    supabaseCache.invalidate('groups:list')
 
     return NextResponse.json(
       {

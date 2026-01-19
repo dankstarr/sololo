@@ -19,10 +19,12 @@ export async function GET(req: NextRequest) {
     const radius = Number(searchParams.get('radius'))
 
     if (!Number.isFinite(lat) || !Number.isFinite(lng) || !Number.isFinite(radius)) {
+      console.error('[API Server] GET /api/top-locations - Validation error: lat, lng, radius are required')
       return NextResponse.json({ error: 'lat, lng, radius are required' }, { status: 400 })
     }
 
     const key = buildAroundKey(lat, lng, radius)
+    console.log(`[API Server] GET /api/top-locations?mode=around&lat=${lat}&lng=${lng}&radius=${radius} - Checking cache (key: ${key})`)
     const supabase = supabaseAdmin()
     const { data, error } = await supabase
       .from('top_location_results')
@@ -34,15 +36,18 @@ export async function GET(req: NextRequest) {
       .maybeSingle()
 
     if (error) {
-      console.error('Error reading top_location_results:', error)
+      console.error('[API Server] GET /api/top-locations - Database error:', error)
       return NextResponse.json({ error: 'Failed to read cache' }, { status: 500 })
     }
 
     if (!data) {
+      console.log(`[API Server] GET /api/top-locations - Cache miss (key: ${key})`)
       return NextResponse.json({ locations: [] }, { status: 200 })
     }
 
-    return NextResponse.json({ locations: data.locations ?? [] }, { status: 200 })
+    const locations = data.locations ?? []
+    console.log(`[API Server] GET /api/top-locations - Cache hit (key: ${key}) - Returning ${Array.isArray(locations) ? locations.length : 0} locations`)
+    return NextResponse.json({ locations }, { status: 200 })
   }
 
   return NextResponse.json({ locations: [] }, { status: 200 })
@@ -60,14 +65,17 @@ export async function POST(req: NextRequest) {
       const locations = Array.isArray(body?.locations) ? body.locations : []
 
       if (!Number.isFinite(lat) || !Number.isFinite(lng) || !Number.isFinite(radius)) {
+        console.error('[API Server] POST /api/top-locations - Validation error: lat, lng, radius are required')
         return NextResponse.json({ error: 'lat, lng, radius are required' }, { status: 400 })
       }
 
       if (locations.length === 0) {
+        console.log('[API Server] POST /api/top-locations - No locations to cache, skipping')
         return NextResponse.json({ ok: true }, { status: 200 })
       }
 
       const cacheKey = buildAroundKey(lat, lng, radius)
+      console.log(`[API Server] POST /api/top-locations - Caching ${locations.length} locations (key: ${cacheKey}, lat: ${lat}, lng: ${lng}, radius: ${radius}km)`)
       const supabase = supabaseAdmin()
 
       const { error } = await supabase.from('top_location_results').insert({
@@ -78,16 +86,17 @@ export async function POST(req: NextRequest) {
       })
 
       if (error) {
-        console.error('Error writing top_location_results:', error)
+        console.error('[API Server] POST /api/top-locations - Database error:', error)
         return NextResponse.json({ error: 'Failed to write cache' }, { status: 500 })
       }
 
+      console.log(`[API Server] POST /api/top-locations - Success - Cached ${locations.length} locations (key: ${cacheKey})`)
       return NextResponse.json({ ok: true }, { status: 200 })
     }
 
     return NextResponse.json({ ok: true }, { status: 200 })
   } catch (e) {
-    console.error('Error in POST /api/top-locations:', e)
+    console.error('[API Server] POST /api/top-locations - Error:', e)
     return NextResponse.json({ error: 'Failed to write cache' }, { status: 500 })
   }
 }

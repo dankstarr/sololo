@@ -8,6 +8,8 @@ export interface DiscoverLocation {
   reviews: number
   distance: string
   image?: string
+  lat?: number // Pre-populated coordinates to avoid geocoding API calls
+  lng?: number
 }
 
 export const discoverLocations: DiscoverLocation[] = [
@@ -19,6 +21,8 @@ export const discoverLocations: DiscoverLocation[] = [
     rating: 4.8,
     reviews: 12543,
     distance: '0.5 km',
+    lat: 51.5081,
+    lng: -0.0759,
   },
   {
     id: '2',
@@ -28,6 +32,8 @@ export const discoverLocations: DiscoverLocation[] = [
     rating: 4.7,
     reviews: 10987,
     distance: '1.2 km',
+    lat: 51.5194,
+    lng: -0.1270,
   },
   {
     id: '3',
@@ -37,6 +43,8 @@ export const discoverLocations: DiscoverLocation[] = [
     rating: 4.6,
     reviews: 15678,
     distance: '2.1 km',
+    lat: 51.5014,
+    lng: -0.1419,
   },
   {
     id: '4',
@@ -46,6 +54,8 @@ export const discoverLocations: DiscoverLocation[] = [
     rating: 4.8,
     reviews: 11234,
     distance: '1.8 km',
+    lat: 51.4994,
+    lng: -0.1274,
   },
   {
     id: '5',
@@ -55,6 +65,8 @@ export const discoverLocations: DiscoverLocation[] = [
     rating: 4.5,
     reviews: 9876,
     distance: '1.5 km',
+    lat: 51.5033,
+    lng: -0.1196,
   },
   {
     id: '6',
@@ -64,6 +76,8 @@ export const discoverLocations: DiscoverLocation[] = [
     rating: 4.7,
     reviews: 8765,
     distance: '0.8 km',
+    lat: 51.5076,
+    lng: -0.0994,
   },
   {
     id: '7',
@@ -73,6 +87,8 @@ export const discoverLocations: DiscoverLocation[] = [
     rating: 4.8,
     reviews: 10234,
     distance: '2.8 km',
+    lat: 51.4967,
+    lng: -0.1764,
   },
   {
     id: '8',
@@ -82,6 +98,8 @@ export const discoverLocations: DiscoverLocation[] = [
     rating: 4.6,
     reviews: 7654,
     distance: '2.5 km',
+    lat: 51.5073,
+    lng: -0.1657,
   },
   {
     id: '9',
@@ -91,6 +109,8 @@ export const discoverLocations: DiscoverLocation[] = [
     rating: 4.4,
     reviews: 8765,
     distance: '1.1 km',
+    lat: 51.5125,
+    lng: -0.1236,
   },
   {
     id: '10',
@@ -100,6 +120,8 @@ export const discoverLocations: DiscoverLocation[] = [
     rating: 4.7,
     reviews: 6543,
     distance: '0.9 km',
+    lat: 51.5138,
+    lng: -0.0984,
   },
   {
     id: '11',
@@ -109,6 +131,8 @@ export const discoverLocations: DiscoverLocation[] = [
     rating: 4.3,
     reviews: 5432,
     distance: '3.2 km',
+    lat: 51.5416,
+    lng: -0.1464,
   },
   {
     id: '12',
@@ -118,6 +142,8 @@ export const discoverLocations: DiscoverLocation[] = [
     rating: 4.6,
     reviews: 4321,
     distance: '1.0 km',
+    lat: 51.5081,
+    lng: -0.0972,
   },
   {
     id: '13',
@@ -127,6 +153,8 @@ export const discoverLocations: DiscoverLocation[] = [
     rating: 4.5,
     reviews: 5678,
     distance: '0.7 km',
+    lat: 51.5055,
+    lng: -0.0907,
   },
   {
     id: '14',
@@ -136,6 +164,8 @@ export const discoverLocations: DiscoverLocation[] = [
     rating: 4.4,
     reviews: 3456,
     distance: '3.1 km',
+    lat: 51.5050,
+    lng: -0.1878,
   },
   {
     id: '15',
@@ -145,6 +175,8 @@ export const discoverLocations: DiscoverLocation[] = [
     rating: 4.7,
     reviews: 7890,
     distance: '2.6 km',
+    lat: 51.4966,
+    lng: -0.1722,
   },
   {
     id: '16',
@@ -154,6 +186,8 @@ export const discoverLocations: DiscoverLocation[] = [
     rating: 4.6,
     reviews: 6789,
     distance: '0.6 km',
+    lat: 51.5055,
+    lng: -0.0754,
   },
   {
     id: '17',
@@ -163,6 +197,8 @@ export const discoverLocations: DiscoverLocation[] = [
     rating: 4.7,
     reviews: 8901,
     distance: '1.9 km',
+    lat: 51.4994,
+    lng: -0.1245,
   },
   {
     id: '18',
@@ -172,6 +208,8 @@ export const discoverLocations: DiscoverLocation[] = [
     rating: 4.3,
     reviews: 4567,
     distance: '1.4 km',
+    lat: 51.5101,
+    lng: -0.1340,
   },
   {
     id: '19',
@@ -181,6 +219,8 @@ export const discoverLocations: DiscoverLocation[] = [
     rating: 4.5,
     reviews: 3210,
     distance: '2.9 km',
+    lat: 51.5232,
+    lng: -0.1544,
   },
   {
     id: '20',
@@ -190,6 +230,8 @@ export const discoverLocations: DiscoverLocation[] = [
     rating: 4.7,
     reviews: 9012,
     distance: '1.6 km',
+    lat: 51.5089,
+    lng: -0.1283,
   },
   {
     id: '21',
@@ -199,6 +241,8 @@ export const discoverLocations: DiscoverLocation[] = [
     rating: 4.4,
     reviews: 2345,
     distance: '5.2 km',
+    lat: 51.4769,
+    lng: -0.0005,
   },
   {
     id: '22',
@@ -208,6 +252,8 @@ export const discoverLocations: DiscoverLocation[] = [
     rating: 4.6,
     reviews: 3456,
     distance: '15.3 km',
+    lat: 51.4036,
+    lng: -0.3378,
   },
   {
     id: '23',
@@ -217,6 +263,8 @@ export const discoverLocations: DiscoverLocation[] = [
     rating: 4.5,
     reviews: 4567,
     distance: '2.7 km',
+    lat: 51.5010,
+    lng: -0.1774,
   },
   {
     id: '24',
@@ -226,6 +274,8 @@ export const discoverLocations: DiscoverLocation[] = [
     rating: 4.4,
     reviews: 5678,
     distance: '3.8 km',
+    lat: 51.5151,
+    lng: -0.1950,
   },
   {
     id: '25',
@@ -235,6 +285,8 @@ export const discoverLocations: DiscoverLocation[] = [
     rating: 4.7,
     reviews: 6789,
     distance: '8.5 km',
+    lat: 51.4846,
+    lng: -0.2957,
   },
   {
     id: '26',
@@ -244,6 +296,8 @@ export const discoverLocations: DiscoverLocation[] = [
     rating: 4.2,
     reviews: 7890,
     distance: '1.3 km',
+    lat: 51.5230,
+    lng: -0.1544,
   },
   {
     id: '27',
@@ -253,6 +307,8 @@ export const discoverLocations: DiscoverLocation[] = [
     rating: 4.5,
     reviews: 3456,
     distance: '0.4 km',
+    lat: 51.5074,
+    lng: -0.1278,
   },
   {
     id: '28',
@@ -262,6 +318,8 @@ export const discoverLocations: DiscoverLocation[] = [
     rating: 4.3,
     reviews: 2345,
     distance: '0.8 km',
+    lat: 51.5133,
+    lng: -0.0836,
   },
   {
     id: '29',
@@ -271,6 +329,8 @@ export const discoverLocations: DiscoverLocation[] = [
     rating: 4.6,
     reviews: 5678,
     distance: '0.7 km',
+    lat: 51.5115,
+    lng: -0.0839,
   },
   {
     id: '30',
@@ -280,6 +340,8 @@ export const discoverLocations: DiscoverLocation[] = [
     rating: 4.7,
     reviews: 4321,
     distance: '1.7 km',
+    lat: 51.5021,
+    lng: -0.1293,
   },
   {
     id: '31',
@@ -289,6 +351,8 @@ export const discoverLocations: DiscoverLocation[] = [
     rating: 4.5,
     reviews: 3210,
     distance: '120 km',
+    lat: 52.1923,
+    lng: -1.7074,
   },
   {
     id: '32',
@@ -298,6 +362,8 @@ export const discoverLocations: DiscoverLocation[] = [
     rating: 4.4,
     reviews: 2109,
     distance: '130 km',
+    lat: 51.1789,
+    lng: -1.8262,
   },
   {
     id: '33',
@@ -307,6 +373,8 @@ export const discoverLocations: DiscoverLocation[] = [
     rating: 4.7,
     reviews: 5432,
     distance: '32 km',
+    lat: 51.4839,
+    lng: -0.6044,
   },
   {
     id: '34',
@@ -316,6 +384,8 @@ export const discoverLocations: DiscoverLocation[] = [
     rating: 4.2,
     reviews: 6543,
     distance: '1.5 km',
+    lat: 51.5150,
+    lng: -0.1419,
   },
   {
     id: '35',
@@ -325,6 +395,8 @@ export const discoverLocations: DiscoverLocation[] = [
     rating: 4.4,
     reviews: 7654,
     distance: '2.3 km',
+    lat: 51.4995,
+    lng: -0.1634,
   },
   {
     id: '36',
@@ -334,6 +406,8 @@ export const discoverLocations: DiscoverLocation[] = [
     rating: 4.5,
     reviews: 4321,
     distance: '3.9 km',
+    lat: 51.5151,
+    lng: -0.1962,
   },
   {
     id: '37',
@@ -343,6 +417,8 @@ export const discoverLocations: DiscoverLocation[] = [
     rating: 4.3,
     reviews: 3210,
     distance: '1.2 km',
+    lat: 51.5133,
+    lng: -0.1327,
   },
   {
     id: '38',
@@ -352,6 +428,8 @@ export const discoverLocations: DiscoverLocation[] = [
     rating: 4.5,
     reviews: 8901,
     distance: '0.9 km',
+    lat: 51.5045,
+    lng: -0.0865,
   },
   {
     id: '39',
@@ -361,6 +439,8 @@ export const discoverLocations: DiscoverLocation[] = [
     rating: 4.4,
     reviews: 2345,
     distance: '0.8 km',
+    lat: 51.5095,
+    lng: -0.0983,
   },
   {
     id: '40',
@@ -370,6 +450,8 @@ export const discoverLocations: DiscoverLocation[] = [
     rating: 4.5,
     reviews: 5678,
     distance: '1.5 km',
+    lat: 51.5081,
+    lng: -0.1281,
   },
   {
     id: '41',
@@ -379,6 +461,8 @@ export const discoverLocations: DiscoverLocation[] = [
     rating: 4.2,
     reviews: 3456,
     distance: '1.3 km',
+    lat: 51.5103,
+    lng: -0.1301,
   },
   {
     id: '42',
@@ -388,6 +472,8 @@ export const discoverLocations: DiscoverLocation[] = [
     rating: 4.4,
     reviews: 4567,
     distance: '2.2 km',
+    lat: 51.5193,
+    lng: -0.0719,
   },
   {
     id: '43',
@@ -397,6 +483,8 @@ export const discoverLocations: DiscoverLocation[] = [
     rating: 4.3,
     reviews: 2109,
     distance: '2.0 km',
+    lat: 51.5200,
+    lng: -0.0750,
   },
   {
     id: '44',
@@ -406,6 +494,8 @@ export const discoverLocations: DiscoverLocation[] = [
     rating: 4.6,
     reviews: 3210,
     distance: '5.8 km',
+    lat: 51.5555,
+    lng: -0.1653,
   },
   {
     id: '45',
@@ -415,6 +505,8 @@ export const discoverLocations: DiscoverLocation[] = [
     rating: 4.5,
     reviews: 2345,
     distance: '12.5 km',
+    lat: 51.4494,
+    lng: -0.2720,
   },
   {
     id: '46',
@@ -424,6 +516,8 @@ export const discoverLocations: DiscoverLocation[] = [
     rating: 4.4,
     reviews: 1234,
     distance: '4.2 km',
+    lat: 51.5367,
+    lng: -0.1594,
   },
   {
     id: '47',
@@ -433,6 +527,8 @@ export const discoverLocations: DiscoverLocation[] = [
     rating: 4.5,
     reviews: 1098,
     distance: '3.1 km',
+    lat: 51.5273,
+    lng: -0.0720,
   },
   {
     id: '48',
@@ -442,6 +538,8 @@ export const discoverLocations: DiscoverLocation[] = [
     rating: 4.3,
     reviews: 987,
     distance: '1.0 km',
+    lat: 51.5150,
+    lng: -0.1250,
   },
   {
     id: '49',
@@ -451,6 +549,8 @@ export const discoverLocations: DiscoverLocation[] = [
     rating: 4.4,
     reviews: 876,
     distance: '4.5 km',
+    lat: 51.5230,
+    lng: -0.1830,
   },
   {
     id: '50',
@@ -460,5 +560,7 @@ export const discoverLocations: DiscoverLocation[] = [
     rating: 4.5,
     reviews: 765,
     distance: '6.2 km',
+    lat: 51.5673,
+    lng: -0.1447,
   },
 ]

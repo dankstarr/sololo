@@ -285,8 +285,33 @@ export default function LocationSelection() {
         if (!isMounted) return
         startStep(step3Id)
 
-        const targetLocationCount = 25 // Always aim for 20-25 locations
+        // Check Supabase cache for destination locations first
         let foundLocations: LocationWithIncluded[] = []
+        try {
+          const cacheUrl = `/api/cache/destination-locations?destination=${encodeURIComponent(tripDestination)}&days=${tripDays}${tripInterests.length > 0 ? `&interests=${tripInterests.join(',')}` : ''}`
+          const cacheResponse = await fetch(cacheUrl)
+          if (cacheResponse.ok) {
+            const cacheData = await cacheResponse.json()
+            if (cacheData.cached && Array.isArray(cacheData.locations) && cacheData.locations.length > 0) {
+              console.log(`Using cached locations for ${tripDestination}: ${cacheData.locations.length} locations`)
+              foundLocations = cacheData.locations.map((loc: any, idx: number) => ({
+                ...loc,
+                id: loc.id || String(idx + 1),
+                included: loc.included !== undefined ? loc.included : true,
+              }))
+              completeStep(step3Id, `Loaded ${foundLocations.length} cached locations`)
+              if (isMounted) {
+                setLocations(foundLocations)
+                setLoading(false)
+              }
+              return
+            }
+          }
+        } catch (e) {
+          console.warn('Error checking destination locations cache:', e)
+        }
+
+        const targetLocationCount = 25 // Always aim for 20-25 locations
         const seenNames = new Set<string>() // Prevent duplicates
 
         if (locationNames.length > 0) {
@@ -396,6 +421,25 @@ export default function LocationSelection() {
         console.log(`Successfully found ${foundLocations.length} locations for ${tripDestination}`)
 
         completeStep(step3Id, `Found ${foundLocations.length} locations`)
+
+        // Cache the results in Supabase (best-effort, don't block on failure)
+        if (foundLocations.length > 0 && isMounted) {
+          try {
+            await fetch('/api/cache/destination-locations', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                destination: tripDestination,
+                days: tripDays,
+                interests: tripInterests,
+                locations: foundLocations,
+              }),
+            })
+            console.log(`Cached ${foundLocations.length} locations for ${tripDestination}`)
+          } catch (e) {
+            console.warn('Failed to cache destination locations:', e)
+          }
+        }
         
         // If we have locations from Google Places that don't have explanations yet, 
         // generate them in ONE batch API call (only if we have many without explanations)

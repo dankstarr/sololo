@@ -8,6 +8,8 @@ interface Location {
   lat: number
   lng: number
   category?: string
+  rating?: number
+  reviews?: number
 }
 
 // Track Google Maps API usage
@@ -139,11 +141,11 @@ interface PlacesResponse {
     place_id: string
     types: string[]
     rating?: number
+    user_ratings_total?: number
     photos?: Array<{
       photo_reference: string
     }>
     formatted_address?: string
-    user_ratings_total?: number
   }>
   status: string
 }
@@ -173,12 +175,33 @@ export async function geocodeAddress(address: string): Promise<{ lat: number; ln
     return null
   }
 
-  // Check cache first
+  // Check client-side cache first
   const cacheKey = mapsCache.key('geocode', { address })
   const cached = mapsCache.get<{ lat: number; lng: number; address: string }>(cacheKey)
   if (cached) {
-    console.log('Geocode: Cache hit')
+    console.log('Geocode: Client cache hit')
     return cached
+  }
+
+  // Check Supabase cache
+  try {
+    const cacheResponse = await fetch(`/api/cache/geocode?address=${encodeURIComponent(address)}`)
+    if (cacheResponse.ok) {
+      const cacheData = await cacheResponse.json()
+      if (cacheData.cached) {
+        console.log('Geocode: Supabase cache hit')
+        const result = {
+          lat: cacheData.lat,
+          lng: cacheData.lng,
+          address: cacheData.address,
+        }
+        // Also cache in client-side for faster subsequent access
+        mapsCache.set(cacheKey, result, 24 * 60 * 60 * 1000)
+        return result
+      }
+    }
+  } catch (e) {
+    console.warn('Error checking Supabase geocode cache:', e)
   }
 
   let didCall = false
@@ -195,8 +218,24 @@ export async function geocodeAddress(address: string): Promise<{ lat: number; ln
         address: result.formatted_address,
       }
       
-      // Cache the result (cache for 24 hours - addresses don't change often)
+      // Cache in client-side (24 hours)
       mapsCache.set(cacheKey, geocodeResult, 24 * 60 * 60 * 1000)
+      
+      // Cache in Supabase (best-effort, don't block on failure)
+      try {
+        await fetch('/api/cache/geocode', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            address,
+            lat: geocodeResult.lat,
+            lng: geocodeResult.lng,
+            formatted_address: geocodeResult.address,
+          }),
+        })
+      } catch (e) {
+        console.warn('Failed to cache geocode in Supabase:', e)
+      }
       
       return geocodeResult
     }
@@ -249,6 +288,8 @@ export async function searchPlaces(
         lat: place.geometry.location.lat,
         lng: place.geometry.location.lng,
         category: place.types[0],
+        rating: place.rating || undefined,
+        reviews: place.user_ratings_total || undefined,
       }))
       
       // Cache the result (cache for 6 hours - places don't change frequently, reduces API calls)
@@ -470,6 +511,7 @@ export async function getPlaceDetails(placeId: string): Promise<{
     return null
   }
 
+  // Check client-side cache first
   const cacheKey = mapsCache.key('placeDetails', { placeId })
   const cached = mapsCache.get<{
     name: string
@@ -487,6 +529,23 @@ export async function getPlaceDetails(placeId: string): Promise<{
   } | null>(cacheKey)
   if (cached !== undefined) {
     return cached
+  }
+
+  // Check Supabase cache
+  try {
+    const cacheResponse = await fetch(`/api/cache/place-details?place_id=${encodeURIComponent(placeId)}`)
+    if (cacheResponse.ok) {
+      const cacheData = await cacheResponse.json()
+      if (cacheData.cached) {
+        console.log('Place details: Supabase cache hit')
+        const details = cacheData.details
+        // Also cache in client-side
+        mapsCache.set(cacheKey, details, 30 * 24 * 60 * 60 * 1000) // 30 days
+        return details
+      }
+    }
+  } catch (e) {
+    console.warn('Error checking Supabase place details cache:', e)
   }
 
   let didCall = false
@@ -516,7 +575,23 @@ export async function getPlaceDetails(placeId: string): Promise<{
         ),
       }
 
+      // Cache in client-side (24 hours)
       mapsCache.set(cacheKey, details, 24 * 60 * 60 * 1000)
+      
+      // Cache in Supabase (best-effort, don't block on failure)
+      try {
+        await fetch('/api/cache/place-details', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            place_id: placeId,
+            details,
+          }),
+        })
+      } catch (e) {
+        console.warn('Failed to cache place details in Supabase:', e)
+      }
+      
       return details
     }
 

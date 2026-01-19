@@ -21,6 +21,8 @@ import {
   Clock,
   DollarSign,
   RefreshCw,
+  CheckSquare,
+  Square,
 } from 'lucide-react'
 import {
   Input,
@@ -38,6 +40,7 @@ import Footer from '@/components/marketing/Footer'
 import { SimpleMap } from '@/components/maps'
 import { useAppStore } from '@/store/useAppStore'
 import { Location } from '@/types'
+import { DiscoverCard } from '@/components/common'
 
 type SortType = 'best' | 'top-rated' | 'most-reviewed' | 'hidden-gems' | 'worst-rated' | 'recently-discovered'
 type FilterType = 'all' | 'current-location' | 'best' | 'top-rated' | 'hidden-gems'
@@ -105,6 +108,87 @@ export default function TopLocationsPage() {
     setBanners((prev) => prev.filter((b) => b.id !== id))
   }
 
+  // Major cities list - cities that should be saved to Supabase
+  const MAJOR_CITIES = useMemo(() => [
+    'London', 'Paris', 'New York', 'Tokyo', 'Berlin', 'Rome', 'Barcelona', 
+    'Amsterdam', 'Madrid', 'Vienna', 'Prague', 'Dubai', 'Singapore', 
+    'Sydney', 'Melbourne', 'Los Angeles', 'San Francisco', 'Chicago', 
+    'Boston', 'Miami', 'Toronto', 'Vancouver', 'Montreal', 'Hong Kong',
+    'Bangkok', 'Seoul', 'Taipei', 'Shanghai', 'Beijing', 'Mumbai', 'Delhi',
+    'Cairo', 'Istanbul', 'Athens', 'Lisbon', 'Dublin', 'Edinburgh', 'Manchester',
+    'Birmingham', 'Liverpool', 'Glasgow', 'Bristol', 'Leeds', 'Newcastle'
+  ], [])
+
+  // Check if a city name matches a major city
+  const isMajorCity = useCallback((cityName: string): boolean => {
+    const normalized = cityName.toLowerCase().trim()
+    return MAJOR_CITIES.some(major => normalized.includes(major.toLowerCase()) || major.toLowerCase().includes(normalized))
+  }, [MAJOR_CITIES])
+
+  // Extract city name from location string (e.g., "London, UK" -> "London")
+  const extractCityName = useCallback((locationString: string): { city: string; country: string | null } => {
+    const parts = locationString.split(',').map(s => s.trim())
+    const city = parts[0] || locationString
+    const country = parts.length > 1 ? parts[parts.length - 1] : null
+    return { city, country }
+  }, [])
+
+  // Save city and locations to Supabase
+  const saveCityToSupabase = useCallback(async (
+    cityName: string,
+    country: string | null,
+    lat: number,
+    lng: number,
+    locations: DiscoverLocation[]
+  ) => {
+    try {
+      const isMajor = isMajorCity(cityName)
+      
+      // Only save major cities or cities with many high-rated locations
+      const highRatedCount = locations.filter(loc => loc.rating >= 4.5 && loc.reviews >= 100).length
+      if (!isMajor && highRatedCount < 10) {
+        return // Skip saving if not major and doesn't have enough high-rated locations
+      }
+
+      console.log(`[API] POST /api/cities - Saving city "${cityName}"${country ? `, ${country}` : ''} with ${locations.length} locations (isMajor: ${isMajor})`)
+      const startTime = performance.now()
+      const response = await fetch('/api/cities', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cityName,
+          country,
+          lat,
+          lng,
+          locations: locations.map(loc => ({
+            name: loc.name,
+            category: loc.category,
+            description: loc.description,
+            rating: loc.rating,
+            reviews: loc.reviews,
+            lat: loc.lat,
+            lng: loc.lng,
+            distance: loc.distance,
+            image: loc.image,
+          })),
+          isMajor,
+        }),
+      })
+      const duration = performance.now() - startTime
+
+      if (response.ok) {
+        const data = await response.json().catch(() => ({}))
+        console.log(`[API] POST /api/cities - Success (${duration.toFixed(2)}ms) - Saved city "${cityName}" with ${data.locationCount || locations.length} locations`)
+      } else {
+        const errorText = await response.text().catch(() => 'Unknown error')
+        console.error(`[API] POST /api/cities - Failed (${response.status}) - ${errorText}`)
+      }
+    } catch (error) {
+      console.error('Error saving city to Supabase:', error)
+    }
+  }, [isMajorCity])
+
+
   // Get user's current location whenever "Around me" is active
   useEffect(() => {
     if (activeFilter === 'current-location' && navigator.geolocation) {
@@ -142,6 +226,8 @@ export default function TopLocationsPage() {
     setSearchRadius(radiusKm)
     setCommittedSearchQuery('')
     setShowSuggestions(false)
+    // Mark that user explicitly searched/entered a location (triggers API calls)
+    setInitializedFromUrl(true)
 
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search)
@@ -157,13 +243,96 @@ export default function TopLocationsPage() {
     }
   }
 
+  // Load city locations from Supabase when cityId is provided
+  useEffect(() => {
+    const cityId = searchParams.get('cityId')
+    
+    if (cityId) {
+      const loadCityLocations = async () => {
+        console.log(`[API] GET /api/cities?cityId=${cityId} - Loading city locations from Supabase`)
+        setLoadingAroundMe(true)
+        try {
+          const res = await fetch(`/api/cities?cityId=${cityId}`)
+          if (res.ok) {
+            const data = await res.json()
+            const locations = data.locations || []
+            
+            // Convert to DiscoverLocation format
+            const discoverLocations: DiscoverLocation[] = locations.map((loc: any, idx: number) => ({
+              id: loc.id || String(idx + 1),
+              name: loc.name,
+              category: loc.category,
+              description: loc.description || `Popular ${loc.category.toLowerCase()}`,
+              rating: loc.rating || 0,
+              reviews: loc.reviews || 0,
+              distance: loc.distance || '0 km',
+              lat: loc.lat || undefined,
+              lng: loc.lng || undefined,
+            }))
+            
+            setAroundMeLocations(discoverLocations)
+            setResultsSource('cached')
+            
+            // Update coordinates map
+            const coordsMap = new Map<string, { lat: number; lng: number }>()
+            discoverLocations.forEach((loc) => {
+              if (loc.lat && loc.lng) {
+                coordsMap.set(loc.id, { lat: loc.lat, lng: loc.lng })
+              }
+            })
+            if (coordsMap.size > 0) {
+              setLocationCoords((prev) => {
+                const next = new Map(prev)
+                coordsMap.forEach((coords, id) => {
+                  next.set(id, coords)
+                })
+                return next
+              })
+            }
+            
+            console.log(`[API] GET /api/cities?cityId=${cityId} - Success - Loaded ${discoverLocations.length} locations from Supabase`)
+          } else {
+            console.error(`[API] GET /api/cities?cityId=${cityId} - Failed (${res.status})`)
+          }
+        } catch (error) {
+          console.error(`[API] GET /api/cities?cityId=${cityId} - Error:`, error)
+        } finally {
+          setLoadingAroundMe(false)
+        }
+      }
+      
+      void loadCityLocations()
+    }
+  }, [searchParams])
+
   // Initialize from URL params if present
   useEffect(() => {
     const lat = searchParams.get('lat')
     const lng = searchParams.get('lng')
     const radius = searchParams.get('radius')
     const q = searchParams.get('q')
+    const cityId = searchParams.get('cityId')
 
+    // If cityId is present, we've already loaded locations in the previous effect
+    // Just set up the location display
+    if (cityId && lat && lng) {
+      const latNum = parseFloat(lat)
+      const lngNum = parseFloat(lng)
+      const radiusNum = radius ? parseFloat(radius) : 10
+
+      if (!isNaN(latNum) && !isNaN(lngNum)) {
+        setInitializedFromUrl(true)
+        setLocationName(q || 'City')
+        setSearchQuery(q || '')
+        setUserLocation({ lat: latNum, lng: lngNum })
+        setActiveFilter('current-location')
+        setSearchRadius(!isNaN(radiusNum) && radiusNum > 0 ? radiusNum : 10)
+        setCommittedSearchQuery('')
+      }
+      return
+    }
+
+    // Otherwise, handle regular location params
     if (lat && lng) {
       const latNum = parseFloat(lat)
       const lngNum = parseFloat(lng)
@@ -184,14 +353,9 @@ export default function TopLocationsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams])
 
-  // On first page load, immediately try to use the current location unless URL provided one
-  useEffect(() => {
-    if (!initializedFromUrl) {
-      enableAroundMe()
-    }
-    // We intentionally only want this to run once on mount
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initializedFromUrl])
+  // On first page load, show hardcoded static locations (no API calls)
+  // Only trigger "around me" if URL parameters are provided (user shared/bookmarked a location)
+  // Otherwise, user must explicitly click "Around me" button to trigger API calls
 
   const enableAroundMe = () => {
     setActiveFilter('current-location')
@@ -203,16 +367,23 @@ export default function TopLocationsPage() {
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        setUserLocation({
+        const coords = {
           lat: position.coords.latitude,
           lng: position.coords.longitude,
-        })
+        }
+        setUserLocation(coords)
+        // Mark that user explicitly enabled "around me" (not initial load)
+        setInitializedFromUrl(true)
+        // Trigger search immediately when user clicks "Around me"
+        setSearchRadius(5) // Default radius
+        setLocationName('My Current Location')
       },
       (error) => {
         console.error('Geolocation error:', error)
         setLocationName('London, UK')
         setUserLocation(LONDON_CENTER)
-        addBanner('info', 'Location access blocked — showing results with a London fallback. Enable location to use “Around me”.')
+        setInitializedFromUrl(true) // Still mark as initialized so API calls happen
+        addBanner('info', 'Location access blocked — showing results with a London fallback. Enable location to use "Around me".')
       }
     )
   }
@@ -238,6 +409,9 @@ export default function TopLocationsPage() {
         2,
         `Showing locations within 2km of ${result.address}.`
       )
+
+      // After setting location, searchAroundMe will be triggered which will save the city if appropriate
+      // This happens automatically via the useEffect that watches searchAroundMe
     } finally {
       setIsSearchingLocation(false)
     }
@@ -281,12 +455,16 @@ export default function TopLocationsPage() {
         // Try cached/database data first (unless bypassed)
         if (!options?.bypassCache) {
           try {
-            const res = await fetch(
-              `/api/top-locations?mode=around&lat=${roundedLat}&lng=${roundedLng}&radius=${roundedRadius}`
-            )
+            const cacheUrl = `/api/top-locations?mode=around&lat=${roundedLat}&lng=${roundedLng}&radius=${roundedRadius}`
+            console.log(`[API] GET ${cacheUrl} - Checking cache for locations`)
+            const startTime = performance.now()
+            const res = await fetch(cacheUrl)
+            const duration = performance.now() - startTime
+            
             if (res.ok) {
               const data = await res.json()
               if (Array.isArray(data.locations) && data.locations.length > 0) {
+                console.log(`[API] GET ${cacheUrl} - Cache hit (${duration.toFixed(2)}ms) - Found ${data.locations.length} cached locations`)
                 const cached = data.locations as DiscoverLocation[]
                 setAroundMeLocations(cached)
 
@@ -309,14 +487,19 @@ export default function TopLocationsPage() {
 
                 setResultsSource('cached')
                 return
+              } else {
+                console.log(`[API] GET ${cacheUrl} - Cache miss (${duration.toFixed(2)}ms) - No cached locations found`)
               }
+            } else {
+              console.error(`[API] GET ${cacheUrl} - Failed (${res.status}) - ${res.statusText}`)
             }
           } catch (e) {
-            console.warn('Failed to load cached top locations:', e)
+            console.warn('[API] Failed to load cached top locations:', e)
           }
         }
 
         setResultsSource('live')
+        console.log(`[API] Searching for places around ${locationName || 'current location'} (lat: ${roundedLat}, lng: ${roundedLng}, radius: ${roundedRadius}km)`)
 
         // Reduced to 2 most important queries to minimize API calls
         // These broad queries return diverse results (attractions, restaurants, landmarks, etc.)
@@ -360,8 +543,8 @@ export default function TopLocationsPage() {
                     name: place.name,
                     category: place.category || 'Attraction',
                     description: `Popular ${place.category || 'attraction'} near you`,
-                    rating: 4.5, // Default rating (will be enriched later if needed)
-                    reviews: 100, // Default reviews (will be enriched later if needed)
+                    rating: place.rating ?? 0, // Use actual rating from Google Places API (nullish coalescing)
+                    reviews: place.reviews ?? 0, // Use actual reviews count from Google Places API (nullish coalescing)
                     distance: `${distanceKm.toFixed(1)} km`,
                     lat: place.lat,
                     lng: place.lng,
@@ -389,10 +572,13 @@ export default function TopLocationsPage() {
         })
 
         setAroundMeLocations(foundPlaces)
+        console.log(`[API] Found ${foundPlaces.length} locations around ${locationName || 'current location'}`)
 
         // Persist results to Supabase cache (best-effort)
         try {
-          await fetch('/api/top-locations', {
+          console.log(`[API] POST /api/top-locations - Saving ${foundPlaces.length} locations to cache`)
+          const startTime = performance.now()
+          const res = await fetch('/api/top-locations', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -403,8 +589,31 @@ export default function TopLocationsPage() {
               locations: foundPlaces,
             }),
           })
+          const duration = performance.now() - startTime
+          
+          if (res.ok) {
+            console.log(`[API] POST /api/top-locations - Success (${duration.toFixed(2)}ms) - Cached ${foundPlaces.length} locations`)
+          } else {
+            console.error(`[API] POST /api/top-locations - Failed (${res.status}) - ${res.statusText}`)
+          }
         } catch (e) {
-          console.warn('Failed to write top locations cache:', e)
+          console.warn('[API] POST /api/top-locations - Error saving cache:', e)
+        }
+
+        // Save city to Supabase if it's a major city or has enough high-rated locations (async, non-blocking)
+        if (locationName && foundPlaces.length > 0) {
+          const { city, country } = extractCityName(locationName)
+          if (city && userLocation) {
+            // Save city asynchronously without blocking the UI
+            // Only save if it's a major city or has enough high-rated locations
+            const highRatedCount = foundPlaces.filter(loc => loc.rating >= 4.5 && loc.reviews >= 100).length
+            const isMajor = isMajorCity(city)
+            
+            if (isMajor || highRatedCount >= 10) {
+              // Save with current data (enrichment can happen later if needed)
+              void saveCityToSupabase(city, country, userLocation.lat, userLocation.lng, foundPlaces)
+            }
+          }
         }
       } catch (error) {
         console.error('Error searching around me:', error)
@@ -413,18 +622,26 @@ export default function TopLocationsPage() {
         setLoadingAroundMe(false)
       }
     },
-    [activeFilter, userLocation, searchRadius]
+    [activeFilter, userLocation, searchRadius, locationName, extractCityName, isMajorCity, saveCityToSupabase]
   )
 
   // Search for places around user's location when "Around me" is active
+  // Only trigger API calls when user explicitly enables "around me" (initializedFromUrl = true)
+  // On initial page load (initializedFromUrl = false), show static hardcoded locations instead
   useEffect(() => {
-    // Debounce to prevent rapid API calls when radius changes quickly
-    const timeoutId = setTimeout(() => {
-      void searchAroundMe()
-    }, 500) // Wait 500ms after last change before searching
+    // Only search if:
+    // 1. "Around me" filter is active
+    // 2. User location is set
+    // 3. User explicitly enabled it (initializedFromUrl = true) OR URL params exist (shared/bookmarked)
+    if (activeFilter === 'current-location' && userLocation && initializedFromUrl) {
+      // Debounce to prevent rapid API calls when radius changes quickly
+      const timeoutId = setTimeout(() => {
+        void searchAroundMe()
+      }, 500) // Wait 500ms after last change before searching
 
-    return () => clearTimeout(timeoutId)
-  }, [searchAroundMe])
+      return () => clearTimeout(timeoutId)
+    }
+  }, [activeFilter, userLocation, searchAroundMe, initializedFromUrl])
 
   // Get all unique categories
   const allCategories = useMemo(() => {
@@ -604,6 +821,35 @@ export default function TopLocationsPage() {
     })
   }
 
+  // Select/deselect all filtered locations
+  const toggleSelectAll = () => {
+    const allFilteredIds = new Set(filteredLocations.map(loc => loc.id))
+    const allSelected = filteredLocations.length > 0 && 
+                       filteredLocations.every(loc => selectedLocationIds.has(loc.id))
+    
+    if (allSelected) {
+      // Deselect all filtered locations
+      setSelectedLocationIds(prev => {
+        const newSet = new Set(prev)
+        filteredLocations.forEach(loc => newSet.delete(loc.id))
+        return newSet
+      })
+    } else {
+      // Select all filtered locations
+      setSelectedLocationIds(prev => {
+        const newSet = new Set(prev)
+        filteredLocations.forEach(loc => newSet.add(loc.id))
+        return newSet
+      })
+    }
+  }
+
+  // Check if all filtered locations are selected
+  const allFilteredSelected = useMemo(() => {
+    return filteredLocations.length > 0 && 
+           filteredLocations.every(loc => selectedLocationIds.has(loc.id))
+  }, [filteredLocations, selectedLocationIds])
+
   // Get selected locations with coordinates
   const selectedLocations = useMemo(() => {
     return filteredLocations
@@ -627,75 +873,25 @@ export default function TopLocationsPage() {
     }))
   }, [filteredLocations])
 
-  // Geocode selected locations when they're selected (for routes / itinerary only)
+  // Initialize coordinates from static location data (no API calls needed!)
+  // Only geocode dynamic "around me" locations that don't have coordinates
   useEffect(() => {
-    const geocodeLocations = async () => {
-      const toGeocode = filteredLocations.filter(
-        (loc) => selectedLocationIds.has(loc.id) && !locationCoords.has(loc.id)
-      )
-
-      if (toGeocode.length === 0) return
-
-      for (const loc of toGeocode) {
-        try {
-          const coords = await geocodeAddress(`${loc.name}, London, UK`)
-          if (coords) {
-            setLocationCoords((prev) => {
-              const newMap = new Map(prev)
-              newMap.set(loc.id, { lat: coords.lat, lng: coords.lng })
-              return newMap
-            })
+    // For static locations from discoverLocations, use their pre-populated coordinates
+    filteredLocations.forEach((loc) => {
+      // Only set if not already set and location has lat/lng in data
+      if (!locationCoords.has(loc.id) && loc.lat !== undefined && loc.lng !== undefined) {
+        setLocationCoords((prev) => {
+          const next = new Map(prev)
+          if (!next.has(loc.id)) {
+            next.set(loc.id, { lat: loc.lat!, lng: loc.lng! })
           }
-        } catch (error) {
-          console.error(`Error geocoding ${loc.name}:`, error)
-        }
+          return next
+        })
       }
-    }
-
-    void geocodeLocations()
-  }, [selectedLocationIds, filteredLocations, locationCoords])
-
-  // Geocode all visible locations for accurate map markers (one-time per location, cached)
-  useEffect(() => {
-    const geocodeVisible = async () => {
-      // Geocode all visible locations (not just top 25) for accurate positioning
-      const toGeocode = filteredLocations.filter((loc) => !locationCoords.has(loc.id))
-
-      if (toGeocode.length === 0) return
-
-      // Process in batches to avoid overwhelming the API
-      const BATCH_SIZE = 10
-      for (let i = 0; i < toGeocode.length; i += BATCH_SIZE) {
-        const batch = toGeocode.slice(i, i + BATCH_SIZE)
-        await Promise.all(
-          batch.map(async (loc) => {
-            try {
-              const coords = await geocodeAddress(`${loc.name}, London, UK`)
-              if (coords && typeof coords.lat === 'number' && typeof coords.lng === 'number' && 
-                  !isNaN(coords.lat) && !isNaN(coords.lng)) {
-                setLocationCoords((prev) => {
-                  const next = new Map(prev)
-                  // Only set if still missing to avoid overwriting any newer values
-                  if (!next.has(loc.id)) {
-                    next.set(loc.id, { lat: coords.lat, lng: coords.lng })
-                  }
-                  return next
-                })
-              }
-            } catch (error) {
-              console.error(`Error geocoding (map preview) ${loc.name}:`, error)
-            }
-          })
-        )
-        // Small delay between batches to avoid rate limiting
-        if (i + BATCH_SIZE < toGeocode.length) {
-          await new Promise(resolve => setTimeout(resolve, 200))
-        }
-      }
-    }
-
-    void geocodeVisible()
-  }, [filteredLocations, locationCoords])
+    })
+    // Only run when filteredLocations changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filteredLocations.length, filteredLocations.map(l => l.id).join(',')])
 
   // Create circular Google Maps route
   const handleCreateCircularRoute = () => {
@@ -865,9 +1061,22 @@ export default function TopLocationsPage() {
         : filteredLocations
 
     const mapped = source.map((loc) => {
-      const coords = locationCoords.get(loc.id)
+      // First check if location has coordinates in its data (static locations - no API call needed!)
+      if (loc.lat !== undefined && loc.lng !== undefined &&
+          typeof loc.lat === 'number' && typeof loc.lng === 'number' &&
+          !isNaN(loc.lat) && !isNaN(loc.lng) &&
+          loc.lat >= -90 && loc.lat <= 90 &&
+          loc.lng >= -180 && loc.lng <= 180) {
+        return {
+          name: loc.name,
+          lat: loc.lat,
+          lng: loc.lng,
+          category: loc.category.toLowerCase().replace(/\s+/g, '-'),
+        }
+      }
 
-      // If we have real coordinates from geocoding, use them (validate they're valid numbers)
+      // Then check locationCoords map (for dynamic "around me" locations)
+      const coords = locationCoords.get(loc.id)
       if (coords?.lat && coords?.lng && 
           typeof coords.lat === 'number' && typeof coords.lng === 'number' &&
           !isNaN(coords.lat) && !isNaN(coords.lng) &&
@@ -881,8 +1090,7 @@ export default function TopLocationsPage() {
         }
       }
 
-      // Otherwise, approximate position from distance string
-      // Parse distance and use it to place marker at approximate distance from center
+      // Fallback: approximate position from distance string (should rarely happen now)
       const distanceKm = parseDistance(loc.distance)
       
       // Use location name hash to create consistent but varied angles
@@ -947,13 +1155,19 @@ export default function TopLocationsPage() {
               <Badge variant="outline" className="text-xs bg-secondary/50 border-primary/20 text-primary">
                 {location.category}
               </Badge>
-              <div className="flex items-center gap-1 text-xs text-gray-600">
-                <Star className="w-3.5 h-3.5 fill-yellow-400 text-yellow-400" />
-                <span className="font-semibold text-gray-900">{enrichment?.rating ?? location.rating}</span>
-                <span className="text-[11px] text-gray-500">
-                  ({formatReviews(enrichment?.reviews ?? location.reviews)})
-                </span>
-              </div>
+              {(enrichment?.rating ?? location.rating) > 0 && (
+                <div className="flex items-center gap-1 text-xs text-gray-600">
+                  <Star className="w-3.5 h-3.5 fill-yellow-400 text-yellow-400" />
+                  <span className="font-semibold text-gray-900">
+                    {(enrichment?.rating ?? location.rating).toFixed(1)}
+                  </span>
+                  {(enrichment?.reviews ?? location.reviews) > 0 && (
+                    <span className="text-[11px] text-gray-500">
+                      ({formatReviews(enrichment?.reviews ?? location.reviews)})
+                    </span>
+                  )}
+                </div>
+              )}
               {isHighRated && (
                 <span className="text-[11px] text-primary font-semibold px-2 py-0.5 bg-primary/10 rounded-full">
                   ⭐ Top Rated
@@ -1126,6 +1340,11 @@ export default function TopLocationsPage() {
 
         {/* Content */}
         <div className="container mx-auto px-4 sm:px-6 py-6 bg-background">
+          {/* Discover Card Section */}
+          <div className="mb-6">
+            <DiscoverCard />
+          </div>
+
           {/* Banners (no animation to avoid opacity/transform issues) */}
           {banners.length > 0 && (
             <div className="mb-4 space-y-2">
@@ -1534,6 +1753,30 @@ export default function TopLocationsPage() {
                   </div>
 
                   <div className="flex flex-col items-start gap-2">
+                    {/* Select All / Deselect All button */}
+                    {filteredLocations.length > 0 && (
+                      <Button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          toggleSelectAll()
+                        }}
+                        variant={allFilteredSelected ? 'primary' : 'outline'}
+                        className="flex items-center gap-2"
+                      >
+                        {allFilteredSelected ? (
+                          <>
+                            <CheckSquare className="w-4 h-4" />
+                            Deselect All ({filteredLocations.length})
+                          </>
+                        ) : (
+                          <>
+                            <Square className="w-4 h-4" />
+                            Select All ({filteredLocations.length})
+                          </>
+                        )}
+                      </Button>
+                    )}
+
                     {/* Global actions for all visible results */}
                     {allVisibleLocations.length > 0 && (
                       <div className="flex gap-3 flex-wrap items-center">

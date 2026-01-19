@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSharedItinerary, storeSharedItinerary } from '@/lib/shared-itineraries-store'
 import { supabaseAdmin } from '@/lib/supabase/admin'
+import { supabaseCache, CACHE_TTL } from '@/lib/utils/supabase-cache'
 
 export const dynamic = 'force-dynamic'
 
@@ -29,6 +30,9 @@ export async function POST(request: NextRequest) {
         itinerary,
       })
       if (error) throw error
+      
+      // Invalidate shared itineraries list cache since we added a new one
+      supabaseCache.invalidate('shared_itineraries:list')
     } catch (e) {
       shareId = storeSharedItinerary({ trip, locations: locations || [], itinerary })
     }
@@ -59,6 +63,13 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    // Check cache first
+    const cacheKey = supabaseCache.key('shared_itinerary', { id: shareId })
+    const cached = supabaseCache.get<any>(cacheKey)
+    if (cached) {
+      return NextResponse.json(cached)
+    }
+
     const supabase = supabaseAdmin()
     const { data: shared, error } = await supabase
       .from('shared_itineraries')
@@ -72,23 +83,29 @@ export async function GET(request: NextRequest) {
     if (!shared) return NextResponse.json({ error: 'Shared itinerary not found' }, { status: 404 })
 
     // Best-effort views increment (non-critical)
+    let views = (shared.views ?? 0) + 1
     try {
       await supabase
         .from('shared_itineraries')
-        .update({ views: (shared.views ?? 0) + 1 })
+        .update({ views })
         .eq('id', shareId)
     } catch (e) {
       console.warn('Failed to increment views:', e)
     }
 
-    return NextResponse.json({
+    const result = {
       id: shared.id,
       trip: shared.trip,
       locations: shared.locations,
       itinerary: shared.itinerary,
       createdAt: shared.created_at ? new Date(shared.created_at).getTime() : Date.now(),
-      views: (shared.views ?? 0) + 1,
-    })
+      views,
+    }
+
+    // Cache the result (cache for 5 minutes)
+    supabaseCache.set(cacheKey, result, CACHE_TTL.SHARED_ITINERARY)
+
+    return NextResponse.json(result)
   } catch (e) {
     const shared = getSharedItinerary(shareId)
     if (!shared) return NextResponse.json({ error: 'Shared itinerary not found' }, { status: 404 })
