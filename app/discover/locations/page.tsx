@@ -23,6 +23,11 @@ import {
   RefreshCw,
   CheckSquare,
   Square,
+  Grid3x3,
+  Columns,
+  List,
+  Bookmark,
+  BookmarkCheck,
 } from 'lucide-react'
 import {
   Input,
@@ -34,6 +39,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { discoverLocations, DiscoverLocation } from '@/config/discover-locations'
 import { openInGoogleMaps, createCircularGoogleMapsRoute } from '@/lib/utils/location'
 import { findPlaceIdByText, geocodeAddress, getPlaceDetails, searchPlaces, getAutocompleteSuggestions } from '@/lib/api/google-maps'
+import { enrichDayData, enrichTripData } from '@/lib/utils/itinerary-enrichment'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Footer from '@/components/marketing/Footer'
@@ -44,6 +50,7 @@ import { DiscoverCard } from '@/components/common'
 
 type SortType = 'best' | 'top-rated' | 'most-reviewed' | 'hidden-gems' | 'worst-rated' | 'recently-discovered'
 type FilterType = 'all' | 'current-location' | 'best' | 'top-rated' | 'hidden-gems'
+type ViewMode = 'grid' | 'two-column' | 'list'
 
 // Extended location interface with coordinates
 interface LocationWithCoords extends DiscoverLocation {
@@ -69,7 +76,7 @@ export default function TopLocationsPage() {
   const effectiveSearchQuery = committedSearchQuery
   // Start with "All" so you always see a list on first load
   const [activeFilter, setActiveFilter] = useState<FilterType>('all')
-  const [sortBy, setSortBy] = useState<SortType>('top-rated')
+  const [sortBy, setSortBy] = useState<SortType>('most-reviewed')
   const [searchRadius, setSearchRadius] = useState(5) // km
   const [minReviews, setMinReviews] = useState(0)
   const [maxReviews, setMaxReviews] = useState(100000)
@@ -77,6 +84,7 @@ export default function TopLocationsPage() {
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null)
   const [locationName, setLocationName] = useState('My Current Location')
   const [selectedLocationIds, setSelectedLocationIds] = useState<Set<string>>(new Set())
+  const [savedLocationIds, setSavedLocationIds] = useState<Set<string>>(new Set())
   const [locationCoords, setLocationCoords] = useState<Map<string, { lat: number; lng: number }>>(new Map())
   const [banners, setBanners] = useState<BannerMessage[]>([])
   const [googleEnrichmentByLocationId, setGoogleEnrichmentByLocationId] = useState<Record<string, GooglePlaceEnrichment | null>>({})
@@ -89,6 +97,7 @@ export default function TopLocationsPage() {
   const [loadingAutocomplete, setLoadingAutocomplete] = useState(false)
   const [initializedFromUrl, setInitializedFromUrl] = useState(false)
   const [resultsSource, setResultsSource] = useState<'static' | 'cached' | 'live'>('static')
+  const [viewMode, setViewMode] = useState<ViewMode>('two-column')
 
   const LONDON_CENTER = useMemo(() => ({ lat: 51.5074, lng: -0.1278 }), [])
   const AUTO_ENRICH_COUNT = 3 // Reduced from 10 to minimize API calls - only auto-enrich top 3 locations
@@ -144,13 +153,29 @@ export default function TopLocationsPage() {
     try {
       const isMajor = isMajorCity(cityName)
       
-      // Only save major cities or cities with many high-rated locations
-      const highRatedCount = locations.filter(loc => loc.rating >= 4.5 && loc.reviews >= 100).length
-      if (!isMajor && highRatedCount < 10) {
-        return // Skip saving if not major and doesn't have enough high-rated locations
+      // Only save major cities or cities with enough locations (even if not all have ratings yet)
+      // Check for locations with ratings OR just count total locations for major cities
+      const highRatedCount = locations.filter(loc => loc.rating && loc.rating >= 4.5 && loc.reviews && loc.reviews >= 100).length
+      const hasEnoughLocations = locations.length >= 10 // Need at least 10 locations to save
+      
+      if (!isMajor && (highRatedCount < 10 || !hasEnoughLocations)) {
+        console.log(`[API] Skipping save for "${cityName}" - not major city and doesn't meet criteria (highRated: ${highRatedCount}, total: ${locations.length})`)
+        return // Skip saving if not major and doesn't have enough high-rated locations or total locations
+      }
+      
+      if (locations.length === 0) {
+        console.warn(`[API] Cannot save city "${cityName}" - no locations provided`)
+        return
       }
 
       console.log(`[API] POST /api/cities - Saving city "${cityName}"${country ? `, ${country}` : ''} with ${locations.length} locations (isMajor: ${isMajor})`)
+      
+      // Log sample data to verify reviews are correct
+      if (locations.length > 0) {
+        const sample = locations[0]
+        console.log(`[API] Sample location data: "${sample.name}" - rating: ${sample.rating}, reviews: ${sample.reviews}`)
+      }
+      
       const startTime = performance.now()
       const response = await fetch('/api/cities', {
         method: 'POST',
@@ -164,12 +189,13 @@ export default function TopLocationsPage() {
             name: loc.name,
             category: loc.category,
             description: loc.description,
-            rating: loc.rating,
-            reviews: loc.reviews,
+            rating: typeof loc.rating === 'number' && loc.rating > 0 ? loc.rating : (loc.rating ? parseFloat(String(loc.rating)) : undefined),
+            reviews: typeof loc.reviews === 'number' && loc.reviews > 0 ? loc.reviews : (loc.reviews ? parseInt(String(loc.reviews), 10) : undefined),
             lat: loc.lat,
             lng: loc.lng,
             distance: loc.distance,
             image: loc.image,
+            placeId: (loc as any).placeId || undefined, // Save placeId for future enrichment
           })),
           isMajor,
         }),
@@ -257,18 +283,48 @@ export default function TopLocationsPage() {
             const data = await res.json()
             const locations = data.locations || []
             
+            console.log(`[API] GET /api/cities?cityId=${cityId} - Response: ${locations.length} locations`, locations.length > 0 ? locations.slice(0, 2) : 'No locations')
+            
+            if (locations.length === 0) {
+              console.warn(`[API] No locations found for cityId=${cityId}. Check if city has locations saved in Supabase.`)
+            }
+            
             // Convert to DiscoverLocation format
-            const discoverLocations: DiscoverLocation[] = locations.map((loc: any, idx: number) => ({
-              id: loc.id || String(idx + 1),
-              name: loc.name,
-              category: loc.category,
-              description: loc.description || `Popular ${loc.category.toLowerCase()}`,
-              rating: loc.rating || 0,
-              reviews: loc.reviews || 0,
-              distance: loc.distance || '0 km',
-              lat: loc.lat || undefined,
-              lng: loc.lng || undefined,
-            }))
+            const discoverLocations: DiscoverLocation[] = locations.map((loc: any, idx: number) => {
+              // Ensure numeric conversion for rating and reviews
+              const rating = typeof loc.rating === 'number' ? loc.rating : (typeof loc.rating === 'string' ? parseFloat(loc.rating) : undefined)
+              const reviews = typeof loc.reviews === 'number' ? loc.reviews : (typeof loc.reviews === 'string' ? parseInt(loc.reviews, 10) : undefined)
+              
+              // Check if this looks like old default data (exactly 4.5 rating and 100 reviews)
+              // Also check for 0 values which might be defaults
+              // Treat these as missing data that needs enrichment
+              const isLikelyOldData = (rating === 4.5 && reviews === 100) || 
+                                     (rating === 0 && reviews === 0) ||
+                                     (rating === 4.5 && reviews === 0) ||
+                                     (rating === 0 && reviews === 100)
+              
+              console.log(`[API] Loading location "${loc.name}": rating=${rating}, reviews=${reviews} (raw: rating=${loc.rating}, reviews=${loc.reviews})${isLikelyOldData ? ' - DETECTED OLD DEFAULT DATA, WILL ENRICH' : ''}`)
+              
+              return {
+                id: loc.id || String(idx + 1),
+                name: loc.name,
+                category: loc.category,
+                description: loc.description || `Popular ${loc.category.toLowerCase()}`,
+                // If it's old default data, treat as undefined so it gets enriched
+                rating: isLikelyOldData ? undefined : (rating !== undefined && !isNaN(rating) && rating > 0 ? rating : undefined),
+                reviews: isLikelyOldData ? undefined : (reviews !== undefined && !isNaN(reviews) && reviews > 0 ? reviews : undefined),
+                distance: loc.distance || '0 km',
+                lat: typeof loc.lat === 'number' ? loc.lat : (loc.lat ? parseFloat(String(loc.lat)) : undefined),
+                lng: typeof loc.lng === 'number' ? loc.lng : (loc.lng ? parseFloat(String(loc.lng)) : undefined),
+                placeId: loc.place_id || undefined, // Store place_id for enrichment
+                needsEnrichment: isLikelyOldData || (!rating && !reviews) || (rating === 0 && reviews === 0), // Flag locations that need enrichment
+              }
+            })
+            
+            // NO AUTOMATIC ENRICHMENT - Data is already in database
+            // Only enrich if user manually clicks "Load Details" button
+            // This prevents unnecessary API calls when viewing cached city data
+            console.log(`[API] Loaded ${discoverLocations.length} locations from Supabase - No automatic enrichment (data already in DB)`)
             
             setAroundMeLocations(discoverLocations)
             setResultsSource('cached')
@@ -291,8 +347,16 @@ export default function TopLocationsPage() {
             }
             
             console.log(`[API] GET /api/cities?cityId=${cityId} - Success - Loaded ${discoverLocations.length} locations from Supabase`)
+            
+            // If no locations found, show a helpful message
+            if (discoverLocations.length === 0) {
+              console.warn(`[API] No locations found for cityId=${cityId}. This city may not have locations saved yet.`)
+              addBanner('info', 'No locations found for this city. Try searching for locations in this city first to save them.')
+            }
           } else {
-            console.error(`[API] GET /api/cities?cityId=${cityId} - Failed (${res.status})`)
+            const errorText = await res.text().catch(() => 'Unknown error')
+            console.error(`[API] GET /api/cities?cityId=${cityId} - Failed (${res.status}): ${errorText}`)
+            addBanner('error', `Failed to load city locations: ${res.status === 404 ? 'City not found' : 'Server error'}`)
           }
         } catch (error) {
           console.error(`[API] GET /api/cities?cityId=${cityId} - Error:`, error)
@@ -303,6 +367,8 @@ export default function TopLocationsPage() {
       
       void loadCityLocations()
     }
+    // Only depend on searchParams to avoid unnecessary re-runs when userLocation or locationName change
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams])
 
   // Initialize from URL params if present
@@ -441,8 +507,17 @@ export default function TopLocationsPage() {
 
   const searchAroundMe = useCallback(
     async (options?: { bypassCache?: boolean }) => {
+      // Don't clear aroundMeLocations if we're viewing a city (cityId in URL)
+      // This preserves city data when filters change
+      const cityId = searchParams.get('cityId')
+      const isViewingCity = !!cityId
+      
       if (activeFilter !== 'current-location' || !userLocation) {
-        setAroundMeLocations([])
+        // Only clear aroundMeLocations if NOT viewing a city
+        // When viewing a city, preserve the city locations even if filter changes
+        if (!isViewingCity) {
+          setAroundMeLocations([])
+        }
         return
       }
 
@@ -522,6 +597,11 @@ export default function TopLocationsPage() {
 
             const places = await searchPlaces(query, userLocation, apiRadiusMeters)
 
+            // Log sample place data to verify API response
+            if (places.length > 0) {
+              console.log(`[API] Sample place from searchPlaces: "${places[0].name}" - rating: ${places[0].rating}, reviews: ${places[0].reviews}`)
+            }
+
             places.forEach((place) => {
               if (foundPlaces.length >= 20) return // Limit to 20 locations as default
 
@@ -538,16 +618,27 @@ export default function TopLocationsPage() {
                 if (distanceKm <= searchRadius) {
                   const locationId = String(foundPlaces.length + 1)
 
+                  // Log if we're getting default values
+                  if ((place.rating === undefined || place.rating === 0) && (place.reviews === undefined || place.reviews === 0)) {
+                    console.warn(`[API] Place "${place.name}" has no rating/reviews data from Text Search API - will need Place Details`)
+                  }
+
                   const loc: any = {
                     id: locationId,
                     name: place.name,
                     category: place.category || 'Attraction',
                     description: `Popular ${place.category || 'attraction'} near you`,
-                    rating: place.rating ?? 0, // Use actual rating from Google Places API (nullish coalescing)
-                    reviews: place.reviews ?? 0, // Use actual reviews count from Google Places API (nullish coalescing)
+                    rating: place.rating !== undefined && place.rating !== null ? place.rating : undefined, // Only set if present
+                    reviews: place.reviews !== undefined && place.reviews !== null ? place.reviews : undefined, // Only set if present
                     distance: `${distanceKm.toFixed(1)} km`,
                     lat: place.lat,
                     lng: place.lng,
+                    placeId: place.placeId, // Store place_id for later enrichment
+                  }
+                  
+                  // Log if we don't have rating/reviews
+                  if (!loc.rating && !loc.reviews && loc.placeId) {
+                    console.log(`[API] Location "${loc.name}" missing rating/reviews, will enrich with place_id: ${loc.placeId}`)
                   }
 
                   foundPlaces.push(loc)
@@ -570,6 +661,50 @@ export default function TopLocationsPage() {
           })
           return next
         })
+
+        // Enrich locations without rating/reviews using Place Details API
+        // Only enrich top 10 locations to minimize API calls
+        const locationsToEnrich = foundPlaces
+          .filter(loc => (!loc.rating && !loc.reviews) && loc.placeId)
+          .slice(0, 10)
+        
+        if (locationsToEnrich.length > 0) {
+          console.log(`[API] Enriching ${locationsToEnrich.length} locations with Place Details API to get rating/reviews`)
+          
+          // Enrich locations in batches to avoid rate limiting
+          const BATCH_SIZE = 3
+          for (let i = 0; i < locationsToEnrich.length; i += BATCH_SIZE) {
+            const batch = locationsToEnrich.slice(i, i + BATCH_SIZE)
+            await Promise.all(
+              batch.map(async (loc) => {
+                if (!loc.placeId) return
+                
+                try {
+                  const details = await getPlaceDetails(loc.placeId)
+                  if (details) {
+                    // Update the location with enriched data
+                    const index = foundPlaces.findIndex(l => l.id === loc.id)
+                    if (index !== -1) {
+                      if (details.rating !== undefined && details.rating !== null) {
+                        foundPlaces[index].rating = details.rating
+                      }
+                      if (details.reviews !== undefined && details.reviews !== null) {
+                        foundPlaces[index].reviews = details.reviews
+                      }
+                      console.log(`[API] Enriched "${loc.name}": rating=${foundPlaces[index].rating}, reviews=${foundPlaces[index].reviews}`)
+                    }
+                  }
+                } catch (error) {
+                  console.error(`[API] Failed to enrich place "${loc.name}":`, error)
+                }
+              })
+            )
+            // Small delay between batches
+            if (i + BATCH_SIZE < locationsToEnrich.length) {
+              await new Promise(resolve => setTimeout(resolve, 500))
+            }
+          }
+        }
 
         setAroundMeLocations(foundPlaces)
         console.log(`[API] Found ${foundPlaces.length} locations around ${locationName || 'current location'}`)
@@ -629,11 +764,16 @@ export default function TopLocationsPage() {
   // Only trigger API calls when user explicitly enables "around me" (initializedFromUrl = true)
   // On initial page load (initializedFromUrl = false), show static hardcoded locations instead
   useEffect(() => {
+    // Don't search if viewing a city (cityId in URL) - preserve city data
+    const cityId = searchParams.get('cityId')
+    const isViewingCity = !!cityId
+    
     // Only search if:
     // 1. "Around me" filter is active
     // 2. User location is set
     // 3. User explicitly enabled it (initializedFromUrl = true) OR URL params exist (shared/bookmarked)
-    if (activeFilter === 'current-location' && userLocation && initializedFromUrl) {
+    // 4. NOT viewing a city (to preserve city data)
+    if (activeFilter === 'current-location' && userLocation && initializedFromUrl && !isViewingCity) {
       // Debounce to prevent rapid API calls when radius changes quickly
       const timeoutId = setTimeout(() => {
         void searchAroundMe()
@@ -641,7 +781,7 @@ export default function TopLocationsPage() {
 
       return () => clearTimeout(timeoutId)
     }
-  }, [activeFilter, userLocation, searchAroundMe, initializedFromUrl])
+  }, [activeFilter, userLocation, searchAroundMe, initializedFromUrl, searchParams])
 
   // Get all unique categories
   const allCategories = useMemo(() => {
@@ -714,8 +854,15 @@ export default function TopLocationsPage() {
 
   // Filter and sort locations
   const filteredLocations = useMemo(() => {
-    // Use "around me" locations when that filter is active, otherwise use static discoverLocations
-    const locationsToFilter = activeFilter === 'current-location' && aroundMeLocations.length > 0
+    // Check if we're viewing a city from DiscoverCard (cityId in URL)
+    const cityId = searchParams.get('cityId')
+    const isViewingCity = !!cityId
+    
+    // Use "around me" locations when:
+    // 1. The "current-location" filter is active, OR
+    // 2. We're viewing a city from DiscoverCard (cityId in URL) - ALWAYS use city locations when cityId is present
+    // When viewing a city, always use aroundMeLocations (even if empty) to prevent falling back to discoverLocations
+    const locationsToFilter = (activeFilter === 'current-location' || isViewingCity)
       ? aroundMeLocations
       : discoverLocations
 
@@ -775,38 +922,115 @@ export default function TopLocationsPage() {
       filtered = filtered.filter((loc) => loc.reviews < 5000 && loc.rating >= 4.5)
     }
 
-    // Sort locations
+    // Sort locations - always prioritize by most reviewed first, then apply user's selected sort
     let sorted = [...filtered]
-    switch (sortBy) {
-      case 'best':
-        // Combined score: rating * 0.6 + (normalized reviews) * 0.4
-        sorted = sorted.sort((a, b) => {
-          const scoreA = a.rating * 0.6 + Math.min(a.reviews / 10000, 1) * 0.4
-          const scoreB = b.rating * 0.6 + Math.min(b.reviews / 10000, 1) * 0.4
-          return scoreB - scoreA
-        })
-        break
-      case 'top-rated':
-        sorted = sorted.sort((a, b) => b.rating - a.rating)
-        break
-      case 'most-reviewed':
-        sorted = sorted.sort((a, b) => b.reviews - a.reviews)
-        break
-      case 'hidden-gems':
-        sorted = sorted.filter(loc => loc.reviews < 5000 && loc.rating >= 4.5)
-          .sort((a, b) => b.rating - a.rating)
-        break
-      case 'worst-rated':
-        sorted = sorted.sort((a, b) => a.rating - b.rating)
-        break
-      case 'recently-discovered':
-        // Sort by ID (newer IDs = more recent)
-        sorted = sorted.sort((a, b) => parseInt(b.id) - parseInt(a.id))
-        break
+    
+    // Primary sort: Always by reviews (most reviewed first)
+    sorted = sorted.sort((a, b) => {
+      const reviewsA = a.reviews || 0
+      const reviewsB = b.reviews || 0
+      if (reviewsB !== reviewsA) {
+        return reviewsB - reviewsA // Most reviewed first
+      }
+      // If reviews are equal, use rating as secondary sort
+      const ratingA = a.rating || 0
+      const ratingB = b.rating || 0
+      return ratingB - ratingA
+    })
+    
+    // Then apply user's selected sort as a secondary sort (if different from most-reviewed)
+    if (sortBy !== 'most-reviewed') {
+      switch (sortBy) {
+        case 'best':
+          // Combined score: rating * 0.6 + (normalized reviews) * 0.4
+          sorted = sorted.sort((a, b) => {
+            const scoreA = (a.rating || 0) * 0.6 + Math.min((a.reviews || 0) / 10000, 1) * 0.4
+            const scoreB = (b.rating || 0) * 0.6 + Math.min((b.reviews || 0) / 10000, 1) * 0.4
+            if (Math.abs(scoreB - scoreA) > 0.01) {
+              return scoreB - scoreA
+            }
+            // If scores are very close, maintain reviews order
+            return (b.reviews || 0) - (a.reviews || 0)
+          })
+          break
+        case 'top-rated':
+          sorted = sorted.sort((a, b) => {
+            const ratingA = a.rating || 0
+            const ratingB = b.rating || 0
+            if (ratingB !== ratingA) {
+              return ratingB - ratingA
+            }
+            // If ratings are equal, maintain reviews order
+            return (b.reviews || 0) - (a.reviews || 0)
+          })
+          break
+        case 'hidden-gems':
+          sorted = sorted.filter(loc => (loc.reviews || 0) < 5000 && (loc.rating || 0) >= 4.5)
+            .sort((a, b) => {
+              const ratingA = a.rating || 0
+              const ratingB = b.rating || 0
+              if (ratingB !== ratingA) {
+                return ratingB - ratingA
+              }
+              // If ratings are equal, maintain reviews order
+              return (b.reviews || 0) - (a.reviews || 0)
+            })
+          break
+        case 'worst-rated':
+          sorted = sorted.sort((a, b) => {
+            const ratingA = a.rating || 0
+            const ratingB = b.rating || 0
+            if (ratingA !== ratingB) {
+              return ratingA - ratingB
+            }
+            // If ratings are equal, maintain reviews order
+            return (b.reviews || 0) - (a.reviews || 0)
+          })
+          break
+        case 'recently-discovered':
+          // Sort by ID (newer IDs = more recent), but maintain reviews order for same IDs
+          sorted = sorted.sort((a, b) => {
+            const idA = parseInt(a.id) || 0
+            const idB = parseInt(b.id) || 0
+            if (idB !== idA) {
+              return idB - idA
+            }
+            // If IDs are equal, maintain reviews order
+            return (b.reviews || 0) - (a.reviews || 0)
+          })
+          break
+      }
     }
 
     return sorted
-  }, [effectiveSearchQuery, activeFilter, sortBy, searchRadius, minReviews, maxReviews, selectedCategories, userLocation, aroundMeLocations, locationCoords])
+  }, [effectiveSearchQuery, activeFilter, sortBy, searchRadius, minReviews, maxReviews, selectedCategories, userLocation, aroundMeLocations, locationCoords, searchParams, discoverLocations])
+
+  // Toggle location save/bookmark
+  const toggleLocationSave = useCallback((locationId: string, e: React.MouseEvent) => {
+    e.stopPropagation() // Prevent card click
+    setSavedLocationIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(locationId)) {
+        next.delete(locationId)
+        addBanner('info', 'Location removed from saved')
+      } else {
+        next.add(locationId)
+        addBanner('success', 'Location saved!')
+      }
+      return next
+    })
+  }, [])
+
+  // Open location in Google Maps
+  const handleOpenInGoogleMaps = useCallback((location: DiscoverLocation, e: React.MouseEvent) => {
+    e.stopPropagation() // Prevent card click
+    const coords = locationCoords.get(location.id)
+    openInGoogleMaps({
+      name: location.name,
+      lat: location.lat || coords?.lat,
+      lng: location.lng || coords?.lng,
+    })
+  }, [locationCoords])
 
   // Toggle location selection
   const toggleLocationSelection = (locationId: string) => {
@@ -952,28 +1176,87 @@ export default function TopLocationsPage() {
     }
   }
 
-  const loadGoogleEnrichment = async (location: DiscoverLocation) => {
-    if (googleEnrichmentLoading.has(location.id)) return
-    if (Object.prototype.hasOwnProperty.call(googleEnrichmentByLocationId, location.id)) return
+  const loadGoogleEnrichment = async (location: DiscoverLocation, forceRefresh = false) => {
+    // Prevent duplicate requests unless forcing refresh
+    if (!forceRefresh && googleEnrichmentLoading.has(location.id)) {
+      console.log(`[Enrichment] Already loading details for "${location.name}"`)
+      return
+    }
+    
+    // If enrichment already exists and not forcing refresh, skip
+    if (!forceRefresh && Object.prototype.hasOwnProperty.call(googleEnrichmentByLocationId, location.id)) {
+      console.log(`[Enrichment] Details already loaded for "${location.name}"`)
+      return
+    }
 
     setGoogleEnrichmentLoading((prev) => new Set(prev).add(location.id))
     try {
-      // Use user location if available (for "around me"), otherwise use London center
-      const searchLocation = activeFilter === 'current-location' && userLocation 
-        ? userLocation 
-        : LONDON_CENTER
+      // First check if location already has a placeId stored
+      let placeId = (location as any).placeId
       
-      const query = `${location.name}${activeFilter === 'current-location' && userLocation ? '' : ', London, UK'}`
-      const placeId = await findPlaceIdByText(query, searchLocation, 20000)
+      // If no placeId, try to find it
       if (!placeId) {
-        setGoogleEnrichmentByLocationId((prev) => ({ ...prev, [location.id]: null }))
-        return
+        // Use coordinates if available, otherwise use user location or London center
+        const searchLocation = (location.lat && location.lng) 
+          ? { lat: location.lat, lng: location.lng }
+          : (activeFilter === 'current-location' && userLocation 
+            ? userLocation 
+            : LONDON_CENTER)
+        
+        // Build query - try multiple formats for better matching
+        const cityName = locationName || searchParams.get('q') || 'London, UK'
+        // Try just the location name first (more likely to match)
+        let query = location.name
+        let placeIdResult = await findPlaceIdByText(query, searchLocation, 50000) // Increase radius for better results
+        
+        // If that fails, try with city name
+        if (!placeIdResult) {
+          query = `${location.name}, ${cityName}`
+          placeIdResult = await findPlaceIdByText(query, searchLocation, 50000)
+        }
+        
+        // If still fails, try with "London, UK" explicitly
+        if (!placeIdResult && !cityName.includes('London')) {
+          query = `${location.name}, London, UK`
+          placeIdResult = await findPlaceIdByText(query, searchLocation, 50000)
+        }
+        
+        placeId = placeIdResult
+        
+        if (!placeId) {
+          console.warn(`[Enrichment] ❌ Could not find place_id for "${location.name}" after trying multiple query formats`)
+          // Don't show error banner - just log it, user can try manually
+          setGoogleEnrichmentByLocationId((prev) => ({ ...prev, [location.id]: null }))
+          return
+        }
+        console.log(`[Enrichment] ✅ Found place_id for "${location.name}": ${placeId}`)
+      } else {
+        console.log(`[Enrichment] Using stored place_id for "${location.name}": ${placeId}`)
       }
 
+      console.log(`[Enrichment] Loading place details for "${location.name}" with place_id: ${placeId}`)
       const details = await getPlaceDetails(placeId)
-      setGoogleEnrichmentByLocationId((prev) => ({ ...prev, [location.id]: details }))
+      
+      if (details) {
+        console.log(`[Enrichment] ✅ Loaded details for "${location.name}":`, {
+          address: details.address,
+          rating: details.rating,
+          reviews: details.reviews,
+          phone: details.phone ? 'Yes' : 'No',
+          website: details.website ? 'Yes' : 'No',
+        })
+        setGoogleEnrichmentByLocationId((prev) => ({ ...prev, [location.id]: details }))
+        addBanner('success', `Loaded details for "${location.name}"`)
+      } else {
+        console.warn(`[Enrichment] ❌ No details returned for "${location.name}"`)
+        // Don't show error banner - just log it silently
+        // The location might still have basic info from Supabase
+        setGoogleEnrichmentByLocationId((prev) => ({ ...prev, [location.id]: null }))
+      }
     } catch (error) {
-      console.error('Failed to load Google place enrichment:', error)
+      console.error(`[Enrichment] ❌ Failed to load Google place enrichment for "${location.name}":`, error)
+      // Don't show error banner - just log it silently
+      // The location might still have basic info from Supabase
       setGoogleEnrichmentByLocationId((prev) => ({ ...prev, [location.id]: null }))
     } finally {
       setGoogleEnrichmentLoading((prev) => {
@@ -1020,23 +1303,58 @@ export default function TopLocationsPage() {
         }
       })
 
-    // Create itinerary days
-    const daysCount = Math.ceil(locations.length / 3)
+    // Create itinerary days, considering travel mode
+    const travelMode = tripData.travelMode
+    
+    // Adjust locations per day based on travel mode
+    const locationsPerDayByMode = {
+      walking: 3,
+      driving: 6,
+      mixed: 4,
+    }
+    
+    const baseLocationsPerDay = locationsPerDayByMode[travelMode]
+    const daysCount = Math.ceil(locations.length / baseLocationsPerDay)
     const locationsPerDay = Math.ceil(locations.length / daysCount)
     const itineraryDays = []
 
+    // Time estimates based on travel mode (in hours per location)
+    const timePerLocation = {
+      walking: { min: 1.5, max: 2.5 },
+      driving: { min: 0.5, max: 1 },
+      mixed: { min: 1, max: 1.5 },
+    }
+    
+    // Distance estimates based on travel mode (in km per location)
+    const distancePerLocation = {
+      walking: 1.2,
+      driving: 3.5,
+      mixed: 2.0,
+    }
+    
+    const timeEstimate = timePerLocation[travelMode]
+    const distanceEstimate = distancePerLocation[travelMode]
+
     for (let i = 0; i < daysCount; i++) {
       const dayLocations = locations.slice(i * locationsPerDay, (i + 1) * locationsPerDay)
-      itineraryDays.push({
+      const totalTime = dayLocations.length * timeEstimate.min
+      const totalTimeMax = dayLocations.length * timeEstimate.max
+      const totalDistance = (dayLocations.length * distanceEstimate).toFixed(1)
+      
+      const baseDay = {
         id: String(i + 1),
         day: i + 1,
         locations: dayLocations.map(loc => loc.name),
-        estimatedTime: `${dayLocations.length * 2}-${dayLocations.length * 3} hours`,
-        distance: `${(dayLocations.length * 1.5).toFixed(1)} km`,
+        estimatedTime: `${totalTime.toFixed(1)}-${totalTimeMax.toFixed(1)} hours`,
+        distance: `${totalDistance} km`,
         pace: 'balanced' as const,
         notes: '',
         budget: `$${dayLocations.length * 20}-${dayLocations.length * 40}`,
-      })
+      }
+      
+      // Enrich day with additional information
+      const enrichedDay = enrichDayData(baseDay, i + 1, travelMode)
+      itineraryDays.push(enrichedDay)
     }
 
     // Save to store
@@ -1125,59 +1443,102 @@ export default function TopLocationsPage() {
     return mapped
   }, [filteredLocations, selectedLocationIds, locationCoords, activeFilter, userLocation])
 
-  const LocationCard = ({ location, index }: { location: DiscoverLocation; index: number }) => {
+  const LocationCard = ({ location, index, viewMode }: { location: DiscoverLocation; index: number; viewMode: ViewMode }) => {
     const isHighRated = location.rating > 4.7
     const isSelected = selectedLocationIds.has(location.id)
+    const isSaved = savedLocationIds.has(location.id)
     const enrichment = googleEnrichmentByLocationId[location.id]
     const isLoading = googleEnrichmentLoading.has(location.id)
 
+    // Only auto-enrich if NOT viewing cached city data (resultsSource !== 'cached')
+    // When viewing cached data from Supabase, all info should already be in database - no API calls needed
     useEffect(() => {
+      // Skip auto-enrichment when viewing cached city data to minimize API calls
+      if (resultsSource === 'cached') {
+        return
+      }
+      
+      // Only auto-enrich top locations for live searches
       if (index < AUTO_ENRICH_COUNT) {
         void loadGoogleEnrichment(location)
       }
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [index, location.id])
+    }, [index, location.id, resultsSource])
+
+    const isListView = viewMode === 'list'
 
     return (
       <div
         className={`bg-white rounded-2xl border ${
           isSelected ? 'border-primary ring-2 ring-primary/20 shadow-lg' : 'border-gray-200 shadow'
-        } p-4 md:p-5 flex flex-col md:flex-row gap-4`}
+        } p-4 md:p-5 ${
+          isListView ? 'flex flex-row gap-4' : 'flex flex-col gap-4 h-full'
+        } cursor-pointer hover:shadow-md transition-shadow`}
         onClick={() => toggleLocationSelection(location.id)}
       >
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-primary text-white flex items-center justify-center font-bold text-base md:text-lg">
+        <div className={`flex items-center gap-3 ${isListView ? 'flex-shrink-0' : ''}`}>
+          <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-primary text-white flex items-center justify-center font-bold text-base md:text-lg flex-shrink-0">
             #{index + 1}
           </div>
-          <div className="flex flex-col">
-            <h3 className="font-bold text-gray-900 text-base md:text-lg">{location.name}</h3>
-            <div className="flex items-center gap-2 mt-1">
-              <Badge variant="outline" className="text-xs bg-secondary/50 border-primary/20 text-primary">
-                {location.category}
-              </Badge>
-              {(enrichment?.rating ?? location.rating) > 0 && (
-                <div className="flex items-center gap-1 text-xs text-gray-600">
-                  <Star className="w-3.5 h-3.5 fill-yellow-400 text-yellow-400" />
-                  <span className="font-semibold text-gray-900">
-                    {(enrichment?.rating ?? location.rating).toFixed(1)}
-                  </span>
-                  {(enrichment?.reviews ?? location.reviews) > 0 && (
-                    <span className="text-[11px] text-gray-500">
-                      ({formatReviews(enrichment?.reviews ?? location.reviews)})
+          {!isListView && (
+            <div className="flex flex-col">
+              <h3 className="font-bold text-gray-900 text-base md:text-lg">{location.name}</h3>
+              <div className="flex items-center gap-2 mt-1 flex-wrap">
+                <Badge variant="outline" className="text-xs bg-secondary/50 border-primary/20 text-primary">
+                  {location.category}
+                </Badge>
+                {(enrichment?.rating ?? location.rating) > 0 && (
+                  <div className="flex items-center gap-1 text-xs text-gray-600">
+                    <Star className="w-3.5 h-3.5 fill-yellow-400 text-yellow-400" />
+                    <span className="font-semibold text-gray-900">
+                      {(enrichment?.rating ?? location.rating).toFixed(1)}
                     </span>
-                  )}
-                </div>
-              )}
-              {isHighRated && (
-                <span className="text-[11px] text-primary font-semibold px-2 py-0.5 bg-primary/10 rounded-full">
-                  ⭐ Top Rated
-                </span>
-              )}
+                    {(enrichment?.reviews ?? location.reviews) > 0 && (
+                      <span className="text-[11px] text-gray-500">
+                        ({formatReviews(enrichment?.reviews ?? location.reviews)})
+                      </span>
+                    )}
+                  </div>
+                )}
+                {isHighRated && (
+                  <span className="text-[11px] text-primary font-semibold px-2 py-0.5 bg-primary/10 rounded-full">
+                    ⭐ Top Rated
+                  </span>
+                )}
+              </div>
             </div>
-          </div>
+          )}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm text-gray-700 leading-relaxed mt-1 md:mt-0">
+          {isListView && (
+            <div className="mb-2">
+              <h3 className="font-bold text-gray-900 text-base md:text-lg mb-1">{location.name}</h3>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Badge variant="outline" className="text-xs bg-secondary/50 border-primary/20 text-primary">
+                  {location.category}
+                </Badge>
+                {(enrichment?.rating ?? location.rating) > 0 && (
+                  <div className="flex items-center gap-1 text-xs text-gray-600">
+                    <Star className="w-3.5 h-3.5 fill-yellow-400 text-yellow-400" />
+                    <span className="font-semibold text-gray-900">
+                      {(enrichment?.rating ?? location.rating).toFixed(1)}
+                    </span>
+                    {(enrichment?.reviews ?? location.reviews) > 0 && (
+                      <span className="text-[11px] text-gray-500">
+                        ({formatReviews(enrichment?.reviews ?? location.reviews)})
+                      </span>
+                    )}
+                  </div>
+                )}
+                {isHighRated && (
+                  <span className="text-[11px] text-primary font-semibold px-2 py-0.5 bg-primary/10 rounded-full">
+                    ⭐ Top Rated
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+          <p className={`text-sm text-gray-700 leading-relaxed ${isListView ? '' : 'mt-1 md:mt-0'}`}>
             {enrichment?.description?.trim() || location.description}
           </p>
           
@@ -1261,6 +1622,39 @@ export default function TopLocationsPage() {
             </div>
           )}
 
+          {/* Action Buttons */}
+          <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-100">
+            <button
+              onClick={(e) => toggleLocationSave(location.id, e)}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                isSaved
+                  ? 'bg-primary text-white hover:bg-primary/90'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+              title={isSaved ? 'Remove from saved' : 'Save location'}
+            >
+              {isSaved ? (
+                <>
+                  <BookmarkCheck className="w-4 h-4" />
+                  <span>Saved</span>
+                </>
+              ) : (
+                <>
+                  <Bookmark className="w-4 h-4" />
+                  <span>Save</span>
+                </>
+              )}
+            </button>
+            <button
+              onClick={(e) => handleOpenInGoogleMaps(location, e)}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition-all"
+              title="Open in Google Maps"
+            >
+              <ExternalLink className="w-4 h-4" />
+              <span>Maps</span>
+            </button>
+          </div>
+
           {/* Action Links */}
           <div className="flex items-center gap-3 text-xs text-gray-600 mt-3 flex-wrap">
             <div className="flex items-center gap-1">
@@ -1296,14 +1690,29 @@ export default function TopLocationsPage() {
 
             <button
               type="button"
-              className="inline-flex items-center gap-1 text-primary font-semibold hover:underline"
+              className="inline-flex items-center gap-1 text-primary font-semibold hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
               onClick={(e) => {
                 e.stopPropagation()
-                void loadGoogleEnrichment(location)
+                void loadGoogleEnrichment(location, !!enrichment) // Force refresh if enrichment exists
               }}
               disabled={isLoading}
             >
-              {isLoading ? 'Loading…' : enrichment ? 'Refresh' : 'Load details'}
+              {isLoading ? (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  Loading…
+                </>
+              ) : enrichment ? (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  Refresh Details
+                </>
+              ) : (
+                <>
+                  <Info className="w-3.5 h-3.5" />
+                  Load Details
+                </>
+              )}
             </button>
           </div>
         </div>
@@ -1704,6 +2113,7 @@ export default function TopLocationsPage() {
                     locations={mapLocations}
                     selectedDay={1}
                     showRoute={false}
+                    travelMode="walking"
                     onLocationClick={(loc) => {
                       if (loc.name === 'You') return
                       const location = filteredLocations.find((l) => l.name === loc.name)
@@ -1723,69 +2133,127 @@ export default function TopLocationsPage() {
               </Card>
 
               {/* Results Header */}
-              <div className="mb-2">
-                <div className="flex items-center justify-between flex-wrap gap-4 mb-2">
-                  <div>
-                    <h2 className="text-xl font-bold text-gray-900 mb-1">
-                      {filteredLocations.length}{' '}
-                      {activeFilter === 'all'
-                        ? 'locations'
-                        : activeFilter === 'best'
-                        ? 'best locations'
-                        : activeFilter === 'top-rated'
-                        ? 'top-rated locations'
-                        : activeFilter === 'current-location'
-                        ? 'locations near you'
-                        : 'hidden gems'}
-                    </h2>
-                    {selectedLocationIds.size > 0 && (
-                      <p className="text-sm text-primary font-semibold mt-1 flex items-center gap-1">
-                        <Check className="w-4 h-4" />
-                        {selectedLocationIds.size} location
-                        {selectedLocationIds.size !== 1 ? 's' : ''} selected
-                      </p>
-                    )}
-                    {activeFilter === 'current-location' && (
-                      <p className="text-xs text-gray-500 mt-2">
-                        Certain place categories are intentionally excluded to keep results high quality.
-                      </p>
+              <div className="mb-4">
+                <div className="flex flex-col gap-4 mb-4">
+                  {/* Title and selection info */}
+                  <div className="flex items-start justify-between gap-4 flex-wrap">
+                    <div className="flex-1 min-w-0">
+                      <h2 className="text-xl font-bold text-gray-900 mb-1">
+                        {filteredLocations.length}{' '}
+                        {activeFilter === 'all'
+                          ? 'locations'
+                          : activeFilter === 'best'
+                          ? 'best locations'
+                          : activeFilter === 'top-rated'
+                          ? 'top-rated locations'
+                          : activeFilter === 'current-location'
+                          ? 'locations near you'
+                          : 'hidden gems'}
+                      </h2>
+                      {selectedLocationIds.size > 0 && (
+                        <p className="text-sm text-primary font-semibold mt-1 flex items-center gap-1">
+                          <Check className="w-4 h-4" />
+                          {selectedLocationIds.size} location
+                          {selectedLocationIds.size !== 1 ? 's' : ''} selected
+                        </p>
+                      )}
+                      {activeFilter === 'current-location' && (
+                        <p className="text-xs text-gray-500 mt-2">
+                          Certain place categories are intentionally excluded to keep results high quality.
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Select All and View Toggle buttons */}
+                    {filteredLocations.length > 0 && (
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        {/* View Toggle */}
+                        <div className="flex items-center gap-1 border border-gray-200 rounded-lg p-1 bg-white">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setViewMode('grid')
+                            }}
+                            className={`p-2 rounded transition-colors ${
+                              viewMode === 'grid'
+                                ? 'bg-primary text-white'
+                                : 'text-gray-600 hover:bg-gray-100'
+                            }`}
+                            title="Grid view"
+                            aria-label="Grid view"
+                          >
+                            <Grid3x3 className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setViewMode('two-column')
+                            }}
+                            className={`p-2 rounded transition-colors ${
+                              viewMode === 'two-column'
+                                ? 'bg-primary text-white'
+                                : 'text-gray-600 hover:bg-gray-100'
+                            }`}
+                            title="2 Column view"
+                            aria-label="2 Column view"
+                          >
+                            <Columns className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setViewMode('list')
+                            }}
+                            className={`p-2 rounded transition-colors ${
+                              viewMode === 'list'
+                                ? 'bg-primary text-white'
+                                : 'text-gray-600 hover:bg-gray-100'
+                            }`}
+                            title="List view"
+                            aria-label="List view"
+                          >
+                            <List className="w-4 h-4" />
+                          </button>
+                        </div>
+
+                        {/* Select All button */}
+                        <Button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            toggleSelectAll()
+                          }}
+                          variant={allFilteredSelected ? 'primary' : 'outline'}
+                          size="small"
+                          className="flex items-center gap-2"
+                        >
+                          {allFilteredSelected ? (
+                            <>
+                              <CheckSquare className="w-4 h-4" />
+                              Deselect All
+                            </>
+                          ) : (
+                            <>
+                              <Square className="w-4 h-4" />
+                              Select All
+                            </>
+                          )}
+                        </Button>
+                      </div>
                     )}
                   </div>
 
-                  <div className="flex flex-col items-start gap-2">
-                    {/* Select All / Deselect All button */}
-                    {filteredLocations.length > 0 && (
-                      <Button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          toggleSelectAll()
-                        }}
-                        variant={allFilteredSelected ? 'primary' : 'outline'}
-                        className="flex items-center gap-2"
-                      >
-                        {allFilteredSelected ? (
-                          <>
-                            <CheckSquare className="w-4 h-4" />
-                            Deselect All ({filteredLocations.length})
-                          </>
-                        ) : (
-                          <>
-                            <Square className="w-4 h-4" />
-                            Select All ({filteredLocations.length})
-                          </>
-                        )}
-                      </Button>
-                    )}
-
+                  {/* Action buttons row */}
+                  <div className="flex flex-wrap gap-2 items-center">
                     {/* Global actions for all visible results */}
                     {allVisibleLocations.length > 0 && (
-                      <div className="flex gap-3 flex-wrap items-center">
+                      <>
                         <Button
                           onClick={(e) => {
                             e.stopPropagation()
                             handleCreateRouteForAll()
                           }}
                           variant="outline"
+                          size="small"
                           className="flex items-center gap-2"
                         >
                           <Navigation className="w-4 h-4" />
@@ -1797,6 +2265,7 @@ export default function TopLocationsPage() {
                             handleShareAll()
                           }}
                           variant="secondary"
+                          size="small"
                           className="flex items-center gap-2"
                         >
                           <MapIcon className="w-4 h-4" />
@@ -1804,35 +2273,49 @@ export default function TopLocationsPage() {
                         </Button>
 
                         {/* When showing cached DB results, allow the user to refresh to live data */}
-                        {activeFilter === 'current-location' && resultsSource === 'cached' && (
+                        {activeFilter === 'current-location' && (resultsSource === 'cached' || searchParams.get('cityId')) && (
                           <Button
                             onClick={(e) => {
                               e.stopPropagation()
-                              void searchAroundMe({ bypassCache: true })
+                              // If cityId is present, remove it and refresh with live data
+                              if (searchParams.get('cityId')) {
+                                const params = new URLSearchParams(window.location.search)
+                                params.delete('cityId')
+                                router.replace(`?${params.toString()}`, { scroll: false })
+                                // Trigger a new search
+                                setTimeout(() => {
+                                  void searchAroundMe({ bypassCache: true })
+                                }, 100)
+                              } else {
+                                void searchAroundMe({ bypassCache: true })
+                              }
                             }}
                             variant="ghost"
+                            size="small"
                             className="flex items-center gap-1 text-xs text-gray-700 hover:text-primary"
                           >
                             <RefreshCw className="w-3.5 h-3.5" />
-                            Refresh results
+                            Refresh with live data
                           </Button>
                         )}
-                      </div>
+                      </>
                     )}
 
                     {/* Action Buttons for selected locations */}
                     {selectedLocationIds.size > 0 && (
-                      <div className="flex gap-3 flex-wrap">
+                      <>
+                        <div className="h-4 w-px bg-gray-300 mx-1" />
                         <Button
                           onClick={(e) => {
                             e.stopPropagation()
                             handleCreateCircularRoute()
                           }}
                           variant="outline"
+                          size="small"
                           className="flex items-center gap-2"
                         >
                           <Route className="w-4 h-4" />
-                          Create Route from Selection
+                          Create Route
                         </Button>
                         <Button
                           onClick={(e) => {
@@ -1841,12 +2324,13 @@ export default function TopLocationsPage() {
                             addBanner('success', 'Converted to itinerary — opening planner...')
                           }}
                           variant="primary"
+                          size="small"
                           className="flex items-center gap-2 bg-primary hover:bg-primary-600"
                         >
                           <Calendar className="w-4 h-4" />
-                          Convert Selection to Itinerary
+                          Convert to Itinerary
                         </Button>
-                      </div>
+                      </>
                     )}
                   </div>
                 </div>
@@ -1859,9 +2343,23 @@ export default function TopLocationsPage() {
                   <p className="text-gray-600 text-sm">Searching within {searchRadius} km radius</p>
                 </Card>
               ) : filteredLocations.length > 0 ? (
-                <div className="space-y-4 pb-6" style={{ minHeight: '200px' }}>
+                <div
+                  className={
+                    viewMode === 'grid'
+                      ? 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 pb-6'
+                      : viewMode === 'two-column'
+                      ? 'grid grid-cols-1 md:grid-cols-2 gap-4 pb-6'
+                      : 'space-y-4 pb-6'
+                  }
+                  style={{ minHeight: '200px' }}
+                >
                   {filteredLocations.map((location, index) => (
-                    <LocationCard key={`location-${location.id}-${index}`} location={location} index={index} />
+                    <LocationCard
+                      key={`location-${location.id}-${index}`}
+                      location={location}
+                      index={index}
+                      viewMode={viewMode}
+                    />
                   ))}
                 </div>
               ) : (

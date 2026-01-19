@@ -172,6 +172,33 @@ export function getInternalApiStats(): InternalApiStats {
       byPath: {},
     }
   }
+  
+  // Reload from localStorage to ensure we have the latest data
+  const saved = safeJsonParse<{ date: string; stats: InternalApiStats }>(
+    localStorage.getItem(INTERNAL_API_STATS_KEY)
+  )
+  if (saved) {
+    const today = new Date().toDateString()
+    if (saved.date === today) {
+      // Update in-memory stats from localStorage
+      internalApiStats = {
+        ...saved.stats,
+        lastRequestTime: internalApiStats.lastRequestTime,
+        requestsThisMinute: internalApiStats.requestsThisMinute,
+        byPath: saved.stats?.byPath || {},
+      }
+    } else {
+      // New day - reset stats
+      internalApiStats = {
+        requestsToday: 0,
+        requestsThisMinute: 0,
+        lastRequestTime: 0,
+        errorsToday: 0,
+        byPath: {},
+      }
+    }
+  }
+  
   // Keep minute window fresh even if user only watches /admin
   checkMinuteWindow(internalApiStats)
   return { ...internalApiStats, byPath: { ...internalApiStats.byPath } }

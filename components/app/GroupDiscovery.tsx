@@ -56,6 +56,35 @@ export default function GroupDiscovery() {
   const [groupName, setGroupName] = useState('')
   const [groupDescription, setGroupDescription] = useState('')
   
+  // Initialize dates from current trip or default to today
+  const getDefaultStartDate = () => {
+    if (currentTrip?.dates?.start) {
+      return currentTrip.dates.start
+    }
+    return new Date().toISOString().split('T')[0]
+  }
+  
+  const getDefaultEndDate = (start?: string) => {
+    if (currentTrip?.dates?.end) {
+      return currentTrip.dates.end
+    }
+    // Default to 7 days from start date
+    const startDate = new Date(start || getDefaultStartDate())
+    startDate.setDate(startDate.getDate() + 7)
+    return startDate.toISOString().split('T')[0]
+  }
+  
+  const [startDate, setStartDate] = useState(() => getDefaultStartDate())
+  const [endDate, setEndDate] = useState(() => getDefaultEndDate())
+  
+  // Sync dates when currentTrip changes
+  useEffect(() => {
+    if (action === 'create' && currentTrip?.dates) {
+      setStartDate(currentTrip.dates.start || new Date().toISOString().split('T')[0])
+      setEndDate(currentTrip.dates.end || getDefaultEndDate(currentTrip.dates.start))
+    }
+  }, [currentTrip, action])
+  
   // Get user-created groups (those not in demo data)
   const demoGroupIds = new Set(DEMO_GROUPS.map(g => g.id))
   const userCreatedGroups = storeGroups.filter(g => !demoGroupIds.has(g.id))
@@ -125,6 +154,32 @@ export default function GroupDiscovery() {
                 onChange={(e) => setGroupDescription(e.target.value)}
               />
             </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Start Date
+                </label>
+                <input
+                  type="date"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-600 focus:border-transparent"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  min={new Date().toISOString().split('T')[0]}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  End Date
+                </label>
+                <input
+                  type="date"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-600 focus:border-transparent"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  min={startDate}
+                />
+              </div>
+            </div>
             <div className="flex gap-4">
               <button
                 onClick={() => router.push('/app/groups')}
@@ -136,8 +191,17 @@ export default function GroupDiscovery() {
                 onClick={async () => {
                   try {
                     const destination = currentTrip?.destination || 'Tokyo, Japan'
-                    const startDate = currentTrip?.dates.start || new Date().toISOString().split('T')[0]
-                    const endDate = currentTrip?.dates.end || new Date().toISOString().split('T')[0]
+                    
+                    // Validate dates
+                    if (!startDate || !endDate) {
+                      alert('Please select both start and end dates')
+                      return
+                    }
+                    
+                    if (new Date(startDate) > new Date(endDate)) {
+                      alert('End date must be after start date')
+                      return
+                    }
 
                     const res = await fetch('/api/groups', {
                       method: 'POST',

@@ -17,10 +17,13 @@ import {
 } from 'lucide-react'
 import { useAppStore } from '@/store/useAppStore'
 import WelcomeBanner from './WelcomeBanner'
+import ThemeSelector from '@/components/common/ThemeSelector'
+import AddressAutocomplete from '@/components/common/AddressAutocomplete'
+import { getThemeById } from '@/config/themes'
 
 export default function TripCreation() {
   const router = useRouter()
-  const { itineraryCount, isPro, checkLimit, incrementItineraryCount, setCurrentTrip } = useAppStore()
+  const { itineraryCount, isPro, checkLimit, incrementItineraryCount, setCurrentTrip, currentTheme, setCurrentTheme } = useAppStore()
   const [formData, setFormData] = useState({
     destination: '',
     days: '',
@@ -29,9 +32,12 @@ export default function TripCreation() {
     travelMode: 'walking',
     pace: 'balanced',
     accessibility: false,
+    theme: currentTheme,
   })
   const [showGroupPrompt, setShowGroupPrompt] = useState(false)
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(false)
+  
+  const selectedThemeData = getThemeById(formData.theme || 'default')
 
   const interests = [
     { id: 'food', label: 'Food', icon: '🍽️' },
@@ -68,7 +74,9 @@ export default function TripCreation() {
       travelMode: formData.travelMode as 'walking' | 'driving' | 'mixed',
       pace: formData.pace as 'relaxed' | 'balanced' | 'packed',
       accessibility: formData.accessibility,
+      theme: formData.theme,
     })
+    setCurrentTheme(formData.theme)
     
     // Generate locations via Gemini API
     try {
@@ -87,43 +95,44 @@ export default function TripCreation() {
     <div className="max-w-2xl mx-auto">
       <WelcomeBanner />
       <div className="mb-8">
-        <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">
+        <h1 className={`text-3xl md:text-4xl font-bold mb-2 ${selectedThemeData.colors.text}`}>
           Plan Your Trip
         </h1>
-        <p className="text-gray-600">
-          Tell us about your travel preferences and we’ll create the perfect itinerary
+        <p className={`${selectedThemeData.style === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
+          Tell us about your travel preferences and we&apos;ll create the perfect itinerary
         </p>
       </div>
 
         <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
-          <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 space-y-4 sm:space-y-6">
+          <div className={`${selectedThemeData.style === 'dark' ? 'bg-slate-800' : 'bg-white'} rounded-xl shadow-lg p-4 sm:p-6 space-y-4 sm:space-y-6`}>
             {/* Destination */}
             <div>
-              <label htmlFor="destination" className="flex items-center gap-2 text-gray-700 font-semibold mb-2">
-                <MapPin className="w-5 h-5 text-primary-600" />
+              <label htmlFor="destination" className={`flex items-center gap-2 font-semibold mb-2 ${selectedThemeData.style === 'dark' ? 'text-gray-200' : 'text-gray-700'}`}>
+                <MapPin className="w-5 h-5" style={{ color: selectedThemeData.colors.primary }} />
                 Destination
               </label>
-              <input
-                type="text"
+              <AddressAutocomplete
                 id="destination"
                 name="destination"
                 value={formData.destination}
-                onChange={(e) =>
-                  setFormData({ ...formData, destination: e.target.value })
+                onChange={(value) =>
+                  setFormData({ ...formData, destination: value })
                 }
+                onSelect={(address) => {
+                  setFormData({ ...formData, destination: address })
+                }}
                 placeholder="e.g., Tokyo, Japan"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-600 focus:border-transparent"
                 required
-                aria-required="true"
-                aria-describedby="destination-description"
+                themeStyle={selectedThemeData.style}
+                themeColors={selectedThemeData.colors}
               />
-              <p id="destination-description" className="sr-only">Enter your travel destination</p>
+              <p id="destination-description" className="sr-only">Enter your travel destination. Start typing to see autocomplete suggestions.</p>
             </div>
 
             {/* Days */}
             <div>
-              <label htmlFor="days" className="flex items-center gap-2 text-gray-700 font-semibold mb-2">
-                <Calendar className="w-5 h-5 text-primary-600" />
+              <label htmlFor="days" className={`flex items-center gap-2 font-semibold mb-2 ${selectedThemeData.style === 'dark' ? 'text-gray-200' : 'text-gray-700'}`}>
+                <Calendar className="w-5 h-5" style={{ color: selectedThemeData.colors.primary }} />
                 Number of Days
               </label>
               <input
@@ -137,7 +146,14 @@ export default function TripCreation() {
                   setFormData({ ...formData, days: e.target.value })
                 }
                 placeholder="e.g., 5"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-600 focus:border-transparent"
+                className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:border-transparent ${
+                  selectedThemeData.style === 'dark' 
+                    ? 'bg-slate-700 border-slate-600 text-gray-100 placeholder-gray-400 focus:ring-offset-slate-800' 
+                    : 'border-gray-300 focus:ring-offset-white'
+                }`}
+                style={{ 
+                  '--tw-ring-color': selectedThemeData.colors.primary,
+                } as React.CSSProperties & { '--tw-ring-color': string }}
                 required
                 aria-required="true"
                 aria-describedby="days-description"
@@ -148,7 +164,7 @@ export default function TripCreation() {
             {/* Dates (Optional) */}
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-gray-700 font-semibold mb-2 block">
+                <label className={`font-semibold mb-2 block ${selectedThemeData.style === 'dark' ? 'text-gray-200' : 'text-gray-700'}`}>
                   Start Date (Optional)
                 </label>
                 <input
@@ -160,11 +176,18 @@ export default function TripCreation() {
                       dates: { ...formData.dates, start: e.target.value },
                     })
                   }
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-600 focus:border-transparent"
+                  className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:border-transparent ${
+                    selectedThemeData.style === 'dark' 
+                      ? 'bg-slate-700 border-slate-600 text-gray-100 focus:ring-offset-slate-800' 
+                      : 'border-gray-300 focus:ring-offset-white'
+                  }`}
+                  style={{ 
+                    '--tw-ring-color': selectedThemeData.colors.primary,
+                  } as React.CSSProperties & { '--tw-ring-color': string }}
                 />
               </div>
               <div>
-                <label className="text-gray-700 font-semibold mb-2 block">
+                <label className={`font-semibold mb-2 block ${selectedThemeData.style === 'dark' ? 'text-gray-200' : 'text-gray-700'}`}>
                   End Date (Optional)
                 </label>
                 <input
@@ -176,15 +199,22 @@ export default function TripCreation() {
                       dates: { ...formData.dates, end: e.target.value },
                     })
                   }
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-600 focus:border-transparent"
+                  className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:border-transparent ${
+                    selectedThemeData.style === 'dark' 
+                      ? 'bg-slate-700 border-slate-600 text-gray-100 focus:ring-offset-slate-800' 
+                      : 'border-gray-300 focus:ring-offset-white'
+                  }`}
+                  style={{ 
+                    '--tw-ring-color': selectedThemeData.colors.primary,
+                  } as React.CSSProperties & { '--tw-ring-color': string }}
                 />
               </div>
             </div>
 
             {/* Interests */}
             <div>
-              <label className="flex items-center gap-2 text-gray-700 font-semibold mb-3">
-                <Heart className="w-5 h-5 text-primary-600" />
+              <label className={`flex items-center gap-2 font-semibold mb-3 ${selectedThemeData.style === 'dark' ? 'text-gray-200' : 'text-gray-700'}`}>
+                <Heart className="w-5 h-5" style={{ color: selectedThemeData.colors.primary }} />
                 Interests
               </label>
               <div className="flex flex-wrap gap-3">
@@ -195,11 +225,23 @@ export default function TripCreation() {
                     onClick={() => handleInterestToggle(interest.id)}
                     aria-pressed={formData.interests.includes(interest.id)}
                     aria-label={`${interest.label} interest - ${formData.interests.includes(interest.id) ? 'selected' : 'not selected'}`}
-                    className={`px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg font-medium transition-all focus:outline-none focus:ring-2 focus:ring-primary-600 focus:ring-offset-2 min-h-[44px] text-sm sm:text-base ${
+                    className={`px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg font-medium transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 min-h-[44px] text-sm sm:text-base ${
                       formData.interests.includes(interest.id)
-                        ? 'bg-primary-600 text-white shadow-lg md:scale-105'
+                        ? 'text-white shadow-lg md:scale-105'
+                        : selectedThemeData.style === 'dark'
+                        ? 'bg-slate-700 text-gray-200 hover:bg-slate-600'
                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                     }`}
+                    style={
+                      formData.interests.includes(interest.id)
+                        ? {
+                            backgroundColor: selectedThemeData.colors.primary,
+                            '--tw-ring-color': selectedThemeData.colors.primary,
+                          } as React.CSSProperties & { '--tw-ring-color': string }
+                        : {
+                            '--tw-ring-color': selectedThemeData.colors.primary,
+                          } as React.CSSProperties & { '--tw-ring-color': string }
+                    }
                   >
                     <span className="mr-2" aria-hidden="true">{interest.icon}</span>
                     {interest.label}
@@ -210,8 +252,8 @@ export default function TripCreation() {
 
             {/* Travel Mode */}
             <div>
-              <label className="flex items-center gap-2 text-gray-700 font-semibold mb-3">
-                <Navigation className="w-5 h-5 text-primary-600" />
+              <label className={`flex items-center gap-2 font-semibold mb-3 ${selectedThemeData.style === 'dark' ? 'text-gray-200' : 'text-gray-700'}`}>
+                <Navigation className="w-5 h-5" style={{ color: selectedThemeData.colors.primary }} />
                 Travel Mode
               </label>
               <div className="grid grid-cols-3 gap-2 sm:gap-3">
@@ -224,11 +266,23 @@ export default function TripCreation() {
                     }
                     aria-pressed={formData.travelMode === mode}
                     aria-label={`Travel mode: ${mode}`}
-                    className={`px-2 sm:px-4 py-2.5 sm:py-3 rounded-lg font-medium capitalize transition-all focus:outline-none focus:ring-2 focus:ring-primary-600 focus:ring-offset-2 min-h-[44px] text-sm sm:text-base ${
+                    className={`px-2 sm:px-4 py-2.5 sm:py-3 rounded-lg font-medium capitalize transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 min-h-[44px] text-sm sm:text-base ${
                       formData.travelMode === mode
-                        ? 'bg-primary-600 text-white shadow-lg'
+                        ? 'text-white shadow-lg'
+                        : selectedThemeData.style === 'dark'
+                        ? 'bg-slate-700 text-gray-200 hover:bg-slate-600'
                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                     }`}
+                    style={
+                      formData.travelMode === mode
+                        ? {
+                            backgroundColor: selectedThemeData.colors.primary,
+                            '--tw-ring-color': selectedThemeData.colors.primary,
+                          } as React.CSSProperties & { '--tw-ring-color': string }
+                        : {
+                            '--tw-ring-color': selectedThemeData.colors.primary,
+                          } as React.CSSProperties & { '--tw-ring-color': string }
+                    }
                   >
                     {mode}
                   </button>
@@ -238,8 +292,8 @@ export default function TripCreation() {
 
             {/* Pace */}
             <div>
-              <label className="flex items-center gap-2 text-gray-700 font-semibold mb-3">
-                <Gauge className="w-5 h-5 text-primary-600" />
+              <label className={`flex items-center gap-2 font-semibold mb-3 ${selectedThemeData.style === 'dark' ? 'text-gray-200' : 'text-gray-700'}`}>
+                <Gauge className="w-5 h-5" style={{ color: selectedThemeData.colors.primary }} />
                 Pace
               </label>
               <div className="grid grid-cols-3 gap-2 sm:gap-3">
@@ -250,11 +304,23 @@ export default function TripCreation() {
                     onClick={() => setFormData({ ...formData, pace })}
                     aria-pressed={formData.pace === pace}
                     aria-label={`Pace: ${pace}`}
-                    className={`px-2 sm:px-4 py-2.5 sm:py-3 rounded-lg font-medium capitalize transition-all focus:outline-none focus:ring-2 focus:ring-primary-600 focus:ring-offset-2 min-h-[44px] text-sm sm:text-base ${
+                    className={`px-2 sm:px-4 py-2.5 sm:py-3 rounded-lg font-medium capitalize transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 min-h-[44px] text-sm sm:text-base ${
                       formData.pace === pace
-                        ? 'bg-primary-600 text-white shadow-lg'
+                        ? 'text-white shadow-lg'
+                        : selectedThemeData.style === 'dark'
+                        ? 'bg-slate-700 text-gray-200 hover:bg-slate-600'
                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                     }`}
+                    style={
+                      formData.pace === pace
+                        ? {
+                            backgroundColor: selectedThemeData.colors.primary,
+                            '--tw-ring-color': selectedThemeData.colors.primary,
+                          } as React.CSSProperties & { '--tw-ring-color': string }
+                        : {
+                            '--tw-ring-color': selectedThemeData.colors.primary,
+                          } as React.CSSProperties & { '--tw-ring-color': string }
+                    }
                   >
                     {pace}
                   </button>
@@ -281,6 +347,12 @@ export default function TripCreation() {
                 Accessibility needs
               </label>
             </div>
+
+            {/* Theme Selection */}
+            <ThemeSelector
+              selectedTheme={formData.theme || 'default'}
+              onThemeChange={(themeId) => setFormData({ ...formData, theme: themeId })}
+            />
           </div>
 
           {/* Upgrade Prompt */}
@@ -392,7 +464,11 @@ export default function TripCreation() {
 
           <button
             type="submit"
-            className="w-full px-6 py-3 sm:py-4 bg-primary-600 text-white rounded-xl font-semibold text-base sm:text-lg hover:bg-primary-700 transition-all hover:scale-105 active:scale-95 shadow-xl flex items-center justify-center gap-2 focus:outline-none focus:ring-2 focus:ring-primary-600 focus:ring-offset-2 min-h-[44px]"
+            className="w-full px-6 py-3 sm:py-4 text-white rounded-xl font-semibold text-base sm:text-lg transition-all hover:scale-105 active:scale-95 shadow-xl flex items-center justify-center gap-2 focus:outline-none focus:ring-2 focus:ring-offset-2 min-h-[44px]"
+            style={{
+              backgroundColor: selectedThemeData.colors.primary,
+              '--tw-ring-color': selectedThemeData.colors.primary,
+            } as React.CSSProperties & { '--tw-ring-color': string }}
             aria-label="Generate itinerary based on your preferences"
           >
             Generate Itinerary

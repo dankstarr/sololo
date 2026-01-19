@@ -16,7 +16,8 @@ import { sampleLocations } from '@/config/sample-data'
 import { generateAlternativeLocation as generateAlt, getImageUrl } from '@/lib/utils'
 import { generateLocationExplanation, generateAlternativeLocation, generateLocationSuggestions, generateLocationsWithExplanations } from '@/lib/api/gemini'
 import { searchPlaces, geocodeAddress } from '@/lib/api/google-maps'
-import { Location } from '@/types'
+import { Location, Day, TripFormData } from '@/types'
+import { enrichDayData, enrichTripData } from '@/lib/utils/itinerary-enrichment'
 import { AIReasoningPanel } from '@/components/common'
 import { useAIReasoning } from '@/hooks'
 import { useAppStore } from '@/store/useAppStore'
@@ -27,7 +28,7 @@ interface LocationWithIncluded extends Location {
 
 export default function LocationSelection() {
   const router = useRouter()
-  const { currentTrip, userProfile, setSelectedLocations, setItinerary, setCurrentTripId } = useAppStore()
+  const { currentTrip, userProfile, setSelectedLocations, setItinerary, setCurrentTripId, setCurrentShareId } = useAppStore()
   const [locations, setLocations] = useState<LocationWithIncluded[]>([])
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState<string | null>(null)
@@ -537,42 +538,105 @@ export default function LocationSelection() {
     // Save selected locations to store
     setSelectedLocations(includedLocations)
     
-    // Generate itinerary days from locations
-    const daysCount = currentTrip?.days ? parseInt(currentTrip.days) : Math.ceil(includedLocations.length / 3)
+    // Generate itinerary days from locations, considering travel mode
+    const travelMode = currentTrip?.travelMode || 'walking'
+    
+    // Adjust locations per day based on travel mode:
+    // - Walking: 3-4 locations per day (slower, more time between locations)
+    // - Driving: 5-7 locations per day (faster, can cover more ground)
+    // - Mixed: 4-5 locations per day (combination)
+    const locationsPerDayByMode = {
+      walking: 3,
+      driving: 6,
+      mixed: 4,
+    }
+    
+    const baseLocationsPerDay = locationsPerDayByMode[travelMode]
+    const daysCount = currentTrip?.days 
+      ? parseInt(currentTrip.days) 
+      : Math.ceil(includedLocations.length / baseLocationsPerDay)
     const locationsPerDay = Math.ceil(includedLocations.length / daysCount)
     const itineraryDays = []
     
+    // Time estimates based on travel mode (in hours per location)
+    const timePerLocation = {
+      walking: { min: 1.5, max: 2.5 }, // Walking between locations takes time
+      driving: { min: 0.5, max: 1 },    // Driving is faster
+      mixed: { min: 1, max: 1.5 },     // Mixed mode
+    }
+    
+    // Distance estimates based on travel mode (in km per location)
+    const distancePerLocation = {
+      walking: 1.2,   // Walking distance between locations
+      driving: 3.5,   // Driving allows covering more distance
+      mixed: 2.0,     // Mixed mode
+    }
+    
+    const timeEstimate = timePerLocation[travelMode]
+    const distanceEstimate = distancePerLocation[travelMode]
+    
     for (let i = 0; i < daysCount; i++) {
       const dayLocations = includedLocations.slice(i * locationsPerDay, (i + 1) * locationsPerDay)
-      itineraryDays.push({
+      const totalTime = dayLocations.length * timeEstimate.min
+      const totalTimeMax = dayLocations.length * timeEstimate.max
+      const totalDistance = (dayLocations.length * distanceEstimate).toFixed(1)
+      
+      const baseDay: Day = {
         id: String(i + 1),
         day: i + 1,
         locations: dayLocations.map(loc => loc.name),
-        estimatedTime: `${dayLocations.length * 2}-${dayLocations.length * 3} hours`,
-        distance: `${(dayLocations.length * 1.5).toFixed(1)} km`,
+        estimatedTime: `${totalTime.toFixed(1)}-${totalTimeMax.toFixed(1)} hours`,
+        distance: `${totalDistance} km`,
         pace: currentTrip?.pace === 'relaxed' ? 'relaxed' : currentTrip?.pace === 'packed' ? 'rushed' : 'balanced' as 'relaxed' | 'balanced' | 'rushed',
         notes: '',
         budget: `$${dayLocations.length * 20}-${dayLocations.length * 40}`,
-      })
+      }
+      
+      // Enrich day with additional information
+      const enrichedDay = enrichDayData(baseDay, i + 1, travelMode)
+      itineraryDays.push(enrichedDay)
     }
     
     setItinerary(itineraryDays)
+    
+    // Enrich trip data with additional information
+    const enrichedTrip = currentTrip ? enrichTripData(currentTrip) : currentTrip
+    
     ;(async () => {
       try {
         if (!currentTrip) return
-        const res = await fetch('/api/trips', {
+        
+        // Save trip to database (with enriched data)
+        const tripRes = await fetch('/api/trips', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             userId: userProfile?.id,
-            trip: currentTrip,
+            trip: enrichedTrip || currentTrip,
             locations: includedLocations,
             itinerary: itineraryDays,
           }),
         })
-        if (!res.ok) throw new Error('Failed to persist trip')
-        const data = await res.json()
-        if (data?.id) setCurrentTripId(data.id)
+        if (!tripRes.ok) throw new Error('Failed to persist trip')
+        const tripData = await tripRes.json()
+        if (tripData?.id) setCurrentTripId(tripData.id)
+
+        // Automatically create a shareable link for the itinerary
+        const shareRes = await fetch('/api/share', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            trip: enrichedTrip || currentTrip,
+            locations: includedLocations,
+            itinerary: itineraryDays,
+          }),
+        })
+        if (shareRes.ok) {
+          const shareData = await shareRes.json()
+          if (shareData?.shareId) {
+            setCurrentShareId(shareData.shareId)
+          }
+        }
       } catch (e) {
         console.warn('Trip persistence failed (non-blocking):', e)
       }

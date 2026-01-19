@@ -3,14 +3,30 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { MapPin, ArrowRight, X } from 'lucide-react'
+import { useAuth } from '@/hooks'
 
 export default function Onboarding() {
   const router = useRouter()
+  const { signInWithGoogle } = useAuth()
   const [showOnboarding, setShowOnboarding] = useState(true)
+  const [isSigningIn, setIsSigningIn] = useState(false)
 
   if (!showOnboarding) {
     router.push('/app/home')
     return null
+  }
+
+  const handleGoogleSignIn = async () => {
+    try {
+      setIsSigningIn(true)
+      await signInWithGoogle()
+      // User will be redirected to Google OAuth, then back to callback
+      setShowOnboarding(false)
+    } catch (error) {
+      console.error('Google sign-in failed:', error)
+      setIsSigningIn(false)
+      alert('Failed to sign in with Google. Please try again.')
+    }
   }
 
   return (
@@ -36,18 +52,19 @@ export default function Onboarding() {
 
         <div className="space-y-4">
           <button
-            onClick={() => {
-              // In a real app, this would trigger Google Sign-In
-              router.push('/app/home')
-            }}
-            className="w-full px-6 py-3 bg-primary-600 text-white rounded-lg font-semibold hover:bg-primary-700 transition-all hover:scale-105 active:scale-95 shadow-lg flex items-center justify-center gap-2"
+            onClick={handleGoogleSignIn}
+            disabled={isSigningIn}
+            className="w-full px-6 py-3 bg-primary-600 text-white rounded-lg font-semibold hover:bg-primary-700 transition-all hover:scale-105 active:scale-95 shadow-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Continue with Google
+            {isSigningIn ? 'Signing in...' : 'Continue with Google'}
             <ArrowRight className="w-5 h-5" />
           </button>
 
           <button
-            onClick={() => router.push('/app/home')}
+            onClick={() => {
+              setShowOnboarding(false)
+              router.push('/app/home')
+            }}
             className="w-full px-6 py-3 bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200 transition-all"
           >
             Skip for now

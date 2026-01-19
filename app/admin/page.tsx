@@ -15,6 +15,9 @@ import {
   Activity,
   MapPin,
   Info,
+  Trash2,
+  Building2,
+  X,
 } from 'lucide-react'
 import {
   Chart as ChartJS,
@@ -29,6 +32,7 @@ import {
   Filler,
 } from 'chart.js'
 import { Line, Bar } from 'react-chartjs-2'
+import { PageConfigEditor } from '@/components/admin'
 
 ChartJS.register(
   CategoryScale,
@@ -64,7 +68,7 @@ interface InternalApiUsageStats {
   requestsThisMinute: number
   lastRequestTime: number
   errorsToday: number
-  byPath: Record<string, { count: number; errors: number; avgDurationMs: number }>
+  byPath: Record<string, { count: number; errors: number; avgDurationMs: number; lastMethod?: string; lastStatus?: number }>
 }
 
 interface GCPUsageData {
@@ -115,6 +119,11 @@ export default function AdminPanel() {
   const [usageHistory, setUsageHistory] = useState<Array<{ hour: number; requests: number }>>([])
   const [gcpUsage, setGcpUsage] = useState<GCPUsageData | null>(null)
   const [gcpLoading, setGcpLoading] = useState(false)
+  const [cities, setCities] = useState<Array<{ id: string; name: string; country: string | null; locationCount: number; is_major: boolean }>>([])
+  const [cityLocations, setCityLocations] = useState<Record<string, Array<{ id: string; name: string; category: string; rating: number | null; reviews: number | null }>>>({})
+  const [expandedCityId, setExpandedCityId] = useState<string | null>(null)
+  const [loadingCities, setLoadingCities] = useState(false)
+  const [deleting, setDeleting] = useState<string | null>(null)
 
   useEffect(() => {
     // Generate hourly usage data for the last 24 hours
@@ -157,6 +166,15 @@ export default function AdminPanel() {
   }, [])
 
   const loadStats = useCallback(() => {
+    // Force reload from localStorage
+    if (typeof window !== 'undefined') {
+      // Check if localStorage is accessible
+      try {
+        localStorage.getItem('test')
+      } catch (e) {
+        console.warn('localStorage not accessible:', e)
+      }
+    }
     const currentGeminiStats = getUsageStats()
     const currentMapsStats = getMapsUsageStats()
     const currentInternalStats = getInternalApiStats()
@@ -183,16 +201,122 @@ export default function AdminPanel() {
     }
   }, [])
 
+  const loadCities = useCallback(async () => {
+    setLoadingCities(true)
+    try {
+      const response = await fetch('/api/cities')
+      if (response.ok) {
+        const data = await response.json()
+        setCities(data.cities || [])
+      }
+    } catch (error) {
+      console.error('Error loading cities:', error)
+    } finally {
+      setLoadingCities(false)
+    }
+  }, [])
+
+  const loadCityLocations = useCallback(async (cityId: string) => {
+    try {
+      const response = await fetch(`/api/cities?cityId=${cityId}`)
+      if (response.ok) {
+        const data = await response.json()
+        setCityLocations((prev) => ({
+          ...prev,
+          [cityId]: data.locations || [],
+        }))
+      }
+    } catch (error) {
+      console.error('Error loading city locations:', error)
+    }
+  }, [])
+
+  const deleteLocation = useCallback(async (locationId: string) => {
+    if (!confirm('Are you sure you want to delete this location?')) return
+
+    setDeleting(locationId)
+    try {
+      const response = await fetch(`/api/cities?locationId=${locationId}`, {
+        method: 'DELETE',
+      })
+      if (response.ok) {
+        // Remove from local state
+        setCityLocations((prev) => {
+          const updated = { ...prev }
+          Object.keys(updated).forEach((cityId) => {
+            updated[cityId] = updated[cityId].filter((loc) => loc.id !== locationId)
+          })
+          return updated
+        })
+        // Reload cities to update counts
+        await loadCities()
+        // Reload locations for expanded city
+        if (expandedCityId) {
+          await loadCityLocations(expandedCityId)
+        }
+      } else {
+        alert('Failed to delete location')
+      }
+    } catch (error) {
+      console.error('Error deleting location:', error)
+      alert('Failed to delete location')
+    } finally {
+      setDeleting(null)
+    }
+  }, [expandedCityId, loadCities, loadCityLocations])
+
+  const deleteCity = useCallback(async (cityId: string) => {
+    if (!confirm('Are you sure you want to delete this city and all its locations? This cannot be undone.')) return
+
+    setDeleting(cityId)
+    try {
+      const response = await fetch(`/api/cities?cityId=${cityId}`, {
+        method: 'DELETE',
+      })
+      if (response.ok) {
+        // Remove from local state
+        setCities((prev) => prev.filter((c) => c.id !== cityId))
+        setCityLocations((prev) => {
+          const updated = { ...prev }
+          delete updated[cityId]
+          return updated
+        })
+        if (expandedCityId === cityId) {
+          setExpandedCityId(null)
+        }
+      } else {
+        alert('Failed to delete city')
+      }
+    } catch (error) {
+      console.error('Error deleting city:', error)
+      alert('Failed to delete city')
+    } finally {
+      setDeleting(null)
+    }
+  }, [expandedCityId])
+
+  const toggleCityExpansion = useCallback(async (cityId: string) => {
+    if (expandedCityId === cityId) {
+      setExpandedCityId(null)
+    } else {
+      setExpandedCityId(cityId)
+      if (!cityLocations[cityId]) {
+        await loadCityLocations(cityId)
+      }
+    }
+  }, [expandedCityId, cityLocations, loadCityLocations])
+
   useEffect(() => {
     loadStats()
     loadGcpUsage()
+    loadCities()
     const interval = setInterval(loadStats, 5000) // Update every 5 seconds
     const gcpInterval = setInterval(loadGcpUsage, 60000) // Update GCP data every minute
     return () => {
       clearInterval(interval)
       clearInterval(gcpInterval)
     }
-  }, [loadStats, loadGcpUsage])
+  }, [loadStats, loadGcpUsage, loadCities])
 
   const handleReset = () => {
     if (confirm('Are you sure you want to reset today\'s usage stats for both Gemini and Google Maps?')) {
@@ -277,7 +401,7 @@ export default function AdminPanel() {
                     </div>
                   )}
                 </div>
-              ) : gcpUsage.error ? (
+              ) : gcpUsage.error && !gcpUsage.error.includes('No usage metrics') ? (
                 <div className="bg-red-50 border border-red-200 rounded-lg p-4">
                   <p className="text-red-800 font-semibold mb-2">❌ Error Fetching GCP Data</p>
                   <p className="text-red-700 text-sm">{gcpUsage.error}</p>
@@ -354,14 +478,41 @@ export default function AdminPanel() {
                     <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
                       <div className="flex items-start gap-3">
                         <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                        <div className="text-sm text-blue-800">
-                          <p className="font-semibold mb-1">📊 GCP Metrics Information</p>
-                          <ul className="list-disc list-inside space-y-1 text-blue-700">
-                            <li><strong>Local tracking</strong> (above) updates immediately when APIs are called</li>
-                            <li><strong>GCP metrics</strong> (here) have a 5-15 minute delay and appear after actual API usage</li>
-                            <li>If you see zeros, either: APIs haven&apos;t been used yet, or metrics are still propagating</li>
-                            <li>Compare with local stats above to verify APIs are working</li>
-                          </ul>
+                        <div className="text-sm text-blue-800 flex-1">
+                          <p className="font-semibold mb-2">📊 Why GCP Metrics Show Zero</p>
+                          <div className="space-y-2 text-blue-700">
+                            <div>
+                              <p className="font-medium mb-1">✅ GCP Connection: Working</p>
+                              <p className="text-xs">Project ID: {gcpUsage.projectId || 'Not set'}</p>
+                              {gcpUsage.lastUpdated && (
+                                <p className="text-xs">Last updated: {new Date(gcpUsage.lastUpdated).toLocaleString()}</p>
+                              )}
+                            </div>
+                            <div className="border-t border-blue-200 pt-2 mt-2">
+                              <p className="font-medium mb-1">Possible Reasons for Zero:</p>
+                              <ul className="list-disc list-inside space-y-1 text-xs">
+                                <li><strong>No API calls made yet</strong> - Metrics only appear after APIs are actually used</li>
+                                <li><strong>Metrics delay</strong> - GCP metrics have a 5-15 minute propagation delay</li>
+                                <li><strong>Cloud Monitoring API</strong> - Ensure it&apos;s enabled in your GCP project</li>
+                                <li><strong>API billing</strong> - Metrics may not appear if APIs aren&apos;t properly enabled/billed</li>
+                              </ul>
+                            </div>
+                            <div className="border-t border-blue-200 pt-2 mt-2">
+                              <p className="font-medium mb-1">How to Verify:</p>
+                              <ul className="list-disc list-inside space-y-1 text-xs">
+                                <li>Check <strong>local tracking</strong> (above) - updates immediately when APIs are called</li>
+                                <li>Make some API calls (create a trip, generate locations)</li>
+                                <li>Wait 5-15 minutes, then refresh this page</li>
+                                <li>Compare local stats vs GCP stats - they should match after propagation</li>
+                              </ul>
+                            </div>
+                            {gcpUsage.error && gcpUsage.error.includes('No usage metrics') && (
+                              <div className="mt-2 p-2 bg-white rounded border border-blue-200">
+                                <p className="text-xs font-semibold text-blue-900">GCP Message:</p>
+                                <p className="text-xs text-blue-800">{gcpUsage.error}</p>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -381,7 +532,43 @@ export default function AdminPanel() {
 
         {/* Gemini API Stats Cards */}
         <div className="mb-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">Gemini API Usage</h2>
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+            <h2 className="text-2xl font-bold text-gray-900">Gemini API Usage</h2>
+            {geminiStats.requestsToday === 0 && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-2">
+                <p className="text-sm text-blue-800 flex items-center gap-2">
+                  <Info className="w-4 h-4" />
+                  <span>Stats will appear after making API calls. Try creating a trip to generate locations.</span>
+                </p>
+              </div>
+            )}
+          </div>
+          
+          {/* Diagnostic Info */}
+          {geminiStats.requestsToday === 0 && (
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4">
+              <h3 className="text-sm font-semibold text-gray-900 mb-2">📊 Tracking Status</h3>
+              <div className="text-xs text-gray-600 space-y-1">
+                <p>• Stats are tracked in browser localStorage</p>
+                <p>• Stats reset daily at midnight</p>
+                <p>• Stats only increment when Gemini API calls are made (not cached responses)</p>
+                <p>• To test: Create a new trip at <code className="bg-gray-200 px-1 rounded">/app/home</code> and generate locations</p>
+                {typeof window !== 'undefined' && (
+                  <p className="mt-2">
+                    • localStorage accessible: <span className="font-semibold text-green-600">Yes</span>
+                    {(() => {
+                      try {
+                        const saved = localStorage.getItem('gemini_usage_stats')
+                        return saved ? ` • Data found: ${saved.substring(0, 50)}...` : ' • No saved data yet'
+                      } catch (e) {
+                        return ' • Error accessing localStorage'
+                      }
+                    })()}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="bg-white rounded-xl shadow-lg p-6">
               <div className="flex items-center justify-between mb-2">
@@ -477,7 +664,44 @@ export default function AdminPanel() {
 
         {/* Google Maps API Stats Cards */}
         <div className="mb-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">Google Maps API Usage</h2>
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+            <h2 className="text-2xl font-bold text-gray-900">Google Maps API Usage</h2>
+            {mapsStats.requestsToday === 0 && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-2">
+                <p className="text-sm text-blue-800 flex items-center gap-2">
+                  <Info className="w-4 h-4" />
+                  <span>Stats will appear after making API calls. Try searching for locations or viewing maps.</span>
+                </p>
+              </div>
+            )}
+          </div>
+          
+          {/* Diagnostic Info */}
+          {mapsStats.requestsToday === 0 && (
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4">
+              <h3 className="text-sm font-semibold text-gray-900 mb-2">📊 Tracking Status</h3>
+              <div className="text-xs text-gray-600 space-y-1">
+                <p>• Stats are tracked in browser localStorage</p>
+                <p>• Stats reset daily at midnight</p>
+                <p>• Stats only increment when Maps API calls are made (not cached responses)</p>
+                <p>• To test: Search for locations, view maps, or generate directions</p>
+                {typeof window !== 'undefined' && (
+                  <p className="mt-2">
+                    • localStorage accessible: <span className="font-semibold text-green-600">Yes</span>
+                    {(() => {
+                      try {
+                        const saved = localStorage.getItem('google_maps_usage_stats')
+                        return saved ? ` • Data found: ${saved.substring(0, 50)}...` : ' • No saved data yet'
+                      } catch (e) {
+                        return ' • Error accessing localStorage'
+                      }
+                    })()}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+          
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="bg-white rounded-xl shadow-lg p-6">
               <div className="flex items-center justify-between mb-2">
@@ -574,7 +798,59 @@ export default function AdminPanel() {
 
         {/* Internal App API Stats Cards */}
         <div className="mb-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">App API Usage (Internal)</h2>
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+            <h2 className="text-2xl font-bold text-gray-900">App API Usage (Internal)</h2>
+            {internalStats.requestsToday === 0 && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-2">
+                <p className="text-sm text-blue-800 flex items-center gap-2">
+                  <Info className="w-4 h-4" />
+                  <span>Stats only track calls made with <code className="bg-blue-100 px-1 rounded">trackedFetch()</code></span>
+                </p>
+              </div>
+            )}
+          </div>
+          
+          {/* Diagnostic Info */}
+          {internalStats.requestsToday === 0 && (
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4">
+              <h3 className="text-sm font-semibold text-gray-900 mb-2">📊 Tracking Status</h3>
+              <div className="text-xs text-gray-600 space-y-1">
+                <p>• Only API calls using <code className="bg-gray-200 px-1 rounded">trackedFetch()</code> are tracked</p>
+                <p>• Regular <code className="bg-gray-200 px-1 rounded">fetch()</code> calls are NOT tracked</p>
+                <p>• Stats reset daily at midnight</p>
+                <p>• Currently tracked: {Object.keys(internalStats.byPath || {}).length} endpoints</p>
+                {typeof window !== 'undefined' && (
+                  <p className="mt-2">
+                    • localStorage accessible: <span className="font-semibold text-green-600">Yes</span>
+                    {(() => {
+                      try {
+                        const saved = localStorage.getItem('internal_api_usage_stats')
+                        return saved ? ` • Data found: ${saved.substring(0, 50)}...` : ' • No saved data yet'
+                      } catch (e) {
+                        return ' • Error accessing localStorage'
+                      }
+                    })()}
+                  </p>
+                )}
+                {Object.keys(internalStats.byPath || {}).length > 0 && (
+                  <div className="mt-2 pt-2 border-t border-gray-200">
+                    <p className="font-semibold mb-1">Tracked Endpoints:</p>
+                    <ul className="list-disc list-inside space-y-0.5">
+                      {Object.entries(internalStats.byPath || {}).slice(0, 5).map(([path, data]: [string, any]) => (
+                        <li key={path}>
+                          <code className="bg-gray-200 px-1 rounded">{path}</code>: {data.count} calls
+                        </li>
+                      ))}
+                      {Object.keys(internalStats.byPath || {}).length > 5 && (
+                        <li className="text-gray-500">... and {Object.keys(internalStats.byPath || {}).length - 5} more</li>
+                      )}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+          
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="bg-white rounded-xl shadow-lg p-6">
               <div className="flex items-center justify-between mb-2">
@@ -629,8 +905,17 @@ export default function AdminPanel() {
               </div>
               {(() => {
                 const entries = Object.entries(internalStats.byPath || {})
+                if (entries.length === 0) {
+                  return (
+                    <div className="text-gray-500 text-sm mt-2">
+                      <p>No tracked requests yet</p>
+                      <p className="text-xs mt-1 text-gray-400">
+                        Use <code className="bg-gray-100 px-1 rounded">trackedFetch()</code> instead of <code className="bg-gray-100 px-1 rounded">fetch()</code>
+                      </p>
+                    </div>
+                  )
+                }
                 const top = entries.sort((a, b) => (b[1]?.count || 0) - (a[1]?.count || 0))[0]
-                if (!top) return <div className="text-gray-500 text-sm mt-2">No requests yet</div>
                 const [path, meta] = top
                 return (
                   <div className="mt-1">
@@ -640,6 +925,11 @@ export default function AdminPanel() {
                     <div className="text-xs text-gray-600 mt-1">
                       {meta.count} calls • avg {meta.avgDurationMs}ms • {meta.errors} errors
                     </div>
+                    {meta.lastMethod && (
+                      <div className="text-xs text-gray-500 mt-1">
+                        Method: {meta.lastMethod} • Status: {meta.lastStatus || 'N/A'}
+                      </div>
+                    )}
                   </div>
                 )
               })()}
@@ -927,8 +1217,127 @@ export default function AdminPanel() {
           </div>
         )}
 
+        {/* Discover Cities Management */}
+        <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+              <Building2 className="w-5 h-5 text-primary" />
+              Discover Cities Management
+            </h2>
+            <button
+              onClick={loadCities}
+              disabled={loadingCities}
+              className="px-4 py-2 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 transition-all flex items-center gap-2 disabled:opacity-50"
+            >
+              <RefreshCw className={`w-4 h-4 ${loadingCities ? 'animate-spin' : ''}`} />
+              {loadingCities ? 'Loading...' : 'Refresh'}
+            </button>
+          </div>
+
+          {cities.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              {loadingCities ? 'Loading cities...' : 'No cities found. Cities will appear here as users search for locations.'}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {cities.map((city) => {
+                const isExpanded = expandedCityId === city.id
+                const locations = cityLocations[city.id] || []
+                const isLoadingLocations = isExpanded && locations.length === 0 && !loadingCities
+
+                return (
+                  <div key={city.id} className="border border-gray-200 rounded-lg overflow-hidden">
+                    <div className="bg-gray-50 p-4 flex items-center justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-semibold text-gray-900">
+                            {city.name}
+                            {city.country && <span className="text-gray-600 font-normal">, {city.country}</span>}
+                          </h3>
+                          {city.is_major && (
+                            <span className="px-2 py-0.5 bg-primary/10 text-primary text-xs font-semibold rounded">
+                              Major
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm text-gray-600 mt-1">
+                          {city.locationCount} location{city.locationCount !== 1 ? 's' : ''}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => toggleCityExpansion(city.id)}
+                          className="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-all"
+                        >
+                          {isExpanded ? 'Hide' : 'Show'} Locations
+                        </button>
+                        <button
+                          onClick={() => deleteCity(city.id)}
+                          disabled={deleting === city.id}
+                          className="px-3 py-1.5 text-sm bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-all flex items-center gap-1 disabled:opacity-50"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          {deleting === city.id ? 'Deleting...' : 'Delete City'}
+                        </button>
+                      </div>
+                    </div>
+
+                    {isExpanded && (
+                      <div className="p-4 bg-white border-t border-gray-200">
+                        {isLoadingLocations ? (
+                          <div className="text-center py-4 text-gray-500">Loading locations...</div>
+                        ) : locations.length === 0 ? (
+                          <div className="text-center py-4 text-gray-500">No locations found</div>
+                        ) : (
+                          <div className="space-y-2">
+                            {locations.map((location) => (
+                              <div
+                                key={location.id}
+                                className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                              >
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-semibold text-gray-900">{location.name}</span>
+                                    <span className="px-2 py-0.5 bg-gray-200 text-gray-700 text-xs rounded">
+                                      {location.category}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-3 mt-1 text-xs text-gray-600">
+                                    {location.rating && (
+                                      <span>⭐ {location.rating.toFixed(1)}</span>
+                                    )}
+                                    {location.reviews && (
+                                      <span>💬 {location.reviews.toLocaleString()} reviews</span>
+                                    )}
+                                  </div>
+                                </div>
+                                <button
+                                  onClick={() => deleteLocation(location.id)}
+                                  disabled={deleting === location.id}
+                                  className="ml-4 px-3 py-1.5 text-sm bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-all flex items-center gap-1 disabled:opacity-50"
+                                  title="Delete location"
+                                >
+                                  <X className="w-4 h-4" />
+                                  {deleting === location.id ? 'Deleting...' : 'Delete'}
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Page Configuration Editor */}
+        <PageConfigEditor />
+
         {/* Configuration */}
-        <div className="bg-white rounded-xl shadow-lg p-6">
+        <div className="bg-white rounded-xl shadow-lg p-6 mt-8">
           <h2 className="text-xl font-bold text-gray-900 mb-4">API Configuration</h2>
           <div className="space-y-3">
             <div className="flex items-center justify-between py-2 border-b border-gray-100">

@@ -1,18 +1,29 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { MapPin, X, ArrowRight } from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
+import { useAuth } from '@/hooks'
 
 export default function WelcomeBanner() {
   const router = useRouter()
+  const { signInWithGoogle, isAuthenticated } = useAuth()
   const [isDismissed, setIsDismissed] = useState(false)
+  const [isSigningIn, setIsSigningIn] = useState(false)
 
   // Check if user has dismissed the banner before (using localStorage)
   const [hasSeenBanner, setHasSeenBanner] = useState(() => {
     if (typeof window === 'undefined') return false
     return localStorage.getItem('sololo-welcome-dismissed') === 'true'
   })
+
+  // Hide banner if user is authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      setHasSeenBanner(true)
+    }
+  }, [isAuthenticated])
 
   const handleDismiss = () => {
     setIsDismissed(true)
@@ -21,10 +32,18 @@ export default function WelcomeBanner() {
     }
   }
 
-  const handleGoogleSignIn = () => {
-    // In a real app, this would trigger Google Sign-In
-    handleDismiss()
-    // Could navigate to auth or just dismiss
+  const handleGoogleSignIn = async () => {
+    try {
+      setIsSigningIn(true)
+      await signInWithGoogle()
+      // User will be redirected to Google OAuth, then back to callback
+      handleDismiss()
+    } catch (error) {
+      console.error('Google sign-in failed:', error)
+      setIsSigningIn(false)
+      // Show error message to user (you can add a toast notification here)
+      alert('Failed to sign in with Google. Please try again.')
+    }
   }
 
   if (hasSeenBanner || isDismissed) {
@@ -57,11 +76,18 @@ export default function WelcomeBanner() {
           <div className="flex flex-wrap gap-2">
             <button
               onClick={handleGoogleSignIn}
-              className="px-4 py-2 bg-primary-600 text-white rounded-lg font-semibold text-sm hover:bg-primary-700 hover-lift hover-glow flex items-center gap-2"
+              disabled={isSigningIn}
+              className="px-4 py-2 bg-primary-600 text-white rounded-lg font-semibold text-sm hover:bg-primary-700 hover-lift hover-glow flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Continue with Google
+              {isSigningIn ? 'Signing in...' : 'Continue with Google'}
               <ArrowRight className="w-4 h-4" />
             </button>
+            <Link
+              href="/login"
+              className="px-4 py-2 bg-white text-primary-600 border-2 border-primary-600 rounded-lg font-semibold text-sm hover:bg-primary-50 hover-lift"
+            >
+              Sign In / Sign Up
+            </Link>
             <button
               onClick={handleDismiss}
               className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg font-semibold text-sm hover:bg-gray-50 hover-lift"

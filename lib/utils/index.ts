@@ -8,7 +8,7 @@ export * from './pdf'
 
 // Legacy exports for backward compatibility
 import { formatDate, formatTime } from './date'
-import { openInGoogleMaps, createGoogleMapsList, shareLocation, generateAlternativeLocation, createCircularGoogleMapsRoute } from './location'
+import { openInGoogleMaps, createGoogleMapsList, shareLocation, generateAlternativeLocation, createCircularGoogleMapsRoute, createGoogleMapsUrl } from './location'
 import { getPlaceholderImage, getImageUrl } from './images'
 
 export {
@@ -19,6 +19,7 @@ export {
   shareLocation,
   generateAlternativeLocation,
   createCircularGoogleMapsRoute,
+  createGoogleMapsUrl,
   getPlaceholderImage,
   getImageUrl,
 }

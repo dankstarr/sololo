@@ -14,6 +14,9 @@ import {
   Radio,
   Navigation,
   ArrowLeft,
+  UserPlus,
+  X,
+  CheckCircle,
 } from 'lucide-react'
 import { useAppStore } from '@/store/useAppStore'
 
@@ -70,6 +73,12 @@ export default function GroupChat() {
   ])
   const [newMessage, setNewMessage] = useState('')
   const [meetupMode, setMeetupMode] = useState(false)
+  const [showInviteModal, setShowInviteModal] = useState(false)
+  const [inviteEmail, setInviteEmail] = useState('')
+  const [inviteLoading, setInviteLoading] = useState(false)
+  const [inviteSuccess, setInviteSuccess] = useState(false)
+  const [inviteError, setInviteError] = useState<string | null>(null)
+  const { userProfile } = useAppStore()
 
   const handleSend = () => {
     if (!newMessage.trim()) return
@@ -86,6 +95,47 @@ export default function GroupChat() {
       },
     ])
     setNewMessage('')
+  }
+
+  const handleInvite = async () => {
+    if (!inviteEmail.trim() || !inviteEmail.includes('@')) {
+      setInviteError('Please enter a valid email address')
+      return
+    }
+
+    setInviteLoading(true)
+    setInviteError(null)
+    setInviteSuccess(false)
+
+    try {
+      const res = await fetch(`/api/groups/${group.id}/invite`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: inviteEmail.trim(),
+          invitedBy: userProfile?.id || userProfile?.name || 'You',
+        }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to send invitation')
+      }
+
+      setInviteSuccess(true)
+      setInviteEmail('')
+      
+      // Reset success message after 3 seconds
+      setTimeout(() => {
+        setInviteSuccess(false)
+        setShowInviteModal(false)
+      }, 3000)
+    } catch (err: any) {
+      setInviteError(err.message || 'Failed to send invitation')
+    } finally {
+      setInviteLoading(false)
+    }
   }
 
   const group = currentGroup || {
@@ -310,7 +360,7 @@ export default function GroupChat() {
           </div>
 
           <h3 className="font-semibold text-gray-900 mb-4">Group Members</h3>
-          <div className="space-y-2">
+          <div className="space-y-2 mb-4">
             {['Alex', 'Sarah', 'You'].map((member) => (
               <div
                 key={member}
@@ -323,8 +373,119 @@ export default function GroupChat() {
               </div>
             ))}
           </div>
+          
+          <button
+            onClick={() => {
+              setShowInviteModal(true)
+              setInviteEmail('')
+              setInviteError(null)
+              setInviteSuccess(false)
+            }}
+            className="w-full px-4 py-2 bg-primary-600 text-white rounded-lg font-semibold hover:bg-primary-700 transition-all flex items-center justify-center gap-2"
+          >
+            <UserPlus className="w-4 h-4" />
+            Invite by Email
+          </button>
         </div>
       </div>
+
+      {/* Invite Modal */}
+      {showInviteModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-gray-900">
+                Invite to Group
+              </h2>
+              <button
+                onClick={() => {
+                  setShowInviteModal(false)
+                  setInviteEmail('')
+                  setInviteError(null)
+                  setInviteSuccess(false)
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {inviteSuccess ? (
+              <div className="text-center py-4">
+                <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-2" />
+                <p className="text-gray-700 font-semibold">
+                  Invitation sent successfully!
+                </p>
+                <p className="text-sm text-gray-500 mt-1">
+                  The recipient will receive an email with a link to join.
+                </p>
+              </div>
+            ) : (
+              <>
+                <p className="text-gray-600 mb-4">
+                  Enter an email address to invite someone to this group.
+                </p>
+
+                <div className="mb-4">
+                  <input
+                    type="email"
+                    value={inviteEmail}
+                    onChange={(e) => {
+                      setInviteEmail(e.target.value)
+                      setInviteError(null)
+                    }}
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter' && !inviteLoading) {
+                        handleInvite()
+                      }
+                    }}
+                    placeholder="email@example.com"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-600 focus:border-transparent"
+                    disabled={inviteLoading}
+                  />
+                </div>
+
+                {inviteError && (
+                  <div className="mb-4 bg-red-50 border border-red-200 rounded-lg p-3">
+                    <p className="text-red-700 text-sm">{inviteError}</p>
+                  </div>
+                )}
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => {
+                      setShowInviteModal(false)
+                      setInviteEmail('')
+                      setInviteError(null)
+                    }}
+                    className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200 transition-all"
+                    disabled={inviteLoading}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleInvite}
+                    disabled={inviteLoading || !inviteEmail.trim()}
+                    className="flex-1 px-4 py-2 bg-primary-600 text-white rounded-lg font-semibold hover:bg-primary-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    {inviteLoading ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        Sending...
+                      </>
+                    ) : (
+                      <>
+                        <UserPlus className="w-4 h-4" />
+                        Send Invite
+                      </>
+                    )}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

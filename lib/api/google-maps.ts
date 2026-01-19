@@ -10,6 +10,7 @@ interface Location {
   category?: string
   rating?: number
   reviews?: number
+  placeId?: string
 }
 
 // Track Google Maps API usage
@@ -99,6 +100,38 @@ function checkMapsMinuteLimit() {
 }
 
 export function getMapsUsageStats(): MapsUsageStats {
+  // Reload from localStorage to ensure we have the latest data
+  if (typeof window !== 'undefined') {
+    const saved = localStorage.getItem('google_maps_usage_stats')
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved)
+        const today = new Date().toDateString()
+        const savedDate = parsed.date
+        if (savedDate === today) {
+          // Update in-memory stats from localStorage
+          mapsUsageStats = { 
+            ...parsed.stats, 
+            lastRequestTime: mapsUsageStats.lastRequestTime, 
+            requestsThisMinute: mapsUsageStats.requestsThisMinute 
+          }
+        } else {
+          // New day - reset stats
+          mapsUsageStats = {
+            requestsToday: 0,
+            requestsThisMinute: 0,
+            lastRequestTime: 0,
+            geocodeRequests: 0,
+            placesRequests: 0,
+            directionsRequests: 0,
+            placeDetailsRequests: 0,
+          }
+        }
+      } catch (e) {
+        console.warn('Error loading Google Maps usage stats from localStorage:', e)
+      }
+    }
+  }
   checkMapsMinuteLimit()
   return { ...mapsUsageStats }
 }
@@ -283,14 +316,26 @@ export async function searchPlaces(
 
     if (data.status === 'OK') {
       // Return up to 20 results (Google Places API returns max 20 per request)
-      const results = data.results.slice(0, 20).map((place) => ({
-        name: place.name,
-        lat: place.geometry.location.lat,
-        lng: place.geometry.location.lng,
-        category: place.types[0],
-        rating: place.rating || undefined,
-        reviews: place.user_ratings_total || undefined,
-      }))
+      const results = data.results.slice(0, 20).map((place) => {
+        // Log sample to verify API response
+        if (data.results.indexOf(place) === 0) {
+          console.log(`[API] Google Places Text Search response for "${place.name}":`, {
+            rating: place.rating,
+            user_ratings_total: place.user_ratings_total,
+            place_id: place.place_id,
+          })
+        }
+        
+        return {
+          name: place.name,
+          lat: place.geometry.location.lat,
+          lng: place.geometry.location.lng,
+          category: place.types[0],
+          rating: place.rating !== undefined && place.rating !== null ? place.rating : undefined,
+          reviews: place.user_ratings_total !== undefined && place.user_ratings_total !== null ? place.user_ratings_total : undefined,
+          placeId: place.place_id,
+        }
+      })
       
       // Cache the result (cache for 6 hours - places don't change frequently, reduces API calls)
       mapsCache.set(cacheKey, results, 6 * 60 * 60 * 1000)
@@ -409,15 +454,29 @@ export async function findPlaceIdByText(
     )
     const data: PlacesResponse = await response.json()
 
+    console.log(`[findPlaceIdByText] Query: "${query}", Status: ${data.status}, Results: ${data.results?.length || 0}`)
+    
     if (data.status === 'OK' && data.results.length > 0) {
-      const placeId = data.results[0].place_id
+      // Try to find exact match first (case-insensitive)
+      const exactMatch = data.results.find(r => 
+        r.name.toLowerCase().trim() === query.split(',')[0].toLowerCase().trim()
+      )
+      const placeId = exactMatch?.place_id || data.results[0].place_id
+      
+      console.log(`[findPlaceIdByText] ✅ Found place_id: ${placeId} for "${query}"`)
       mapsCache.set(cacheKey, placeId, 24 * 60 * 60 * 1000)
       return placeId
     }
 
     if (data.status === 'ZERO_RESULTS') {
+      console.warn(`[findPlaceIdByText] ❌ ZERO_RESULTS for query: "${query}"`)
       mapsCache.set(cacheKey, null, 6 * 60 * 60 * 1000)
       return null
+    }
+
+    // Log other statuses for debugging
+    if (data.status !== 'OK') {
+      console.warn(`[findPlaceIdByText] ❌ Status: ${data.status} for query: "${query}"`, (data as any).error_message || '')
     }
 
     return null
@@ -557,6 +616,8 @@ export async function getPlaceDetails(placeId: string): Promise<{
 
     const data = await response.json()
 
+    console.log(`[getPlaceDetails] Status: ${data.status} for place_id: ${placeId}`)
+    
     if (data.status === 'OK' && data.result) {
       const details = {
         name: data.result.name,
@@ -593,6 +654,23 @@ export async function getPlaceDetails(placeId: string): Promise<{
       }
       
       return details
+    }
+
+    // Handle different error statuses
+    if (data.status === 'NOT_FOUND') {
+      console.warn(`[getPlaceDetails] ❌ Place not found for place_id: ${placeId}`)
+      mapsCache.set(cacheKey, null, 6 * 60 * 60 * 1000) // Cache negative result
+      return null
+    }
+    
+    if (data.status === 'ZERO_RESULTS') {
+      console.warn(`[getPlaceDetails] ❌ Zero results for place_id: ${placeId}`)
+      mapsCache.set(cacheKey, null, 6 * 60 * 60 * 1000) // Cache negative result
+      return null
+    }
+    
+    if (data.status && data.status !== 'OK') {
+      console.warn(`[getPlaceDetails] ❌ Status: ${data.status} for place_id: ${placeId}`, (data as any).error_message || '')
     }
 
     mapsCache.set(cacheKey, null, 6 * 60 * 60 * 1000)

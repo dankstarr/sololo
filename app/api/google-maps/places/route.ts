@@ -18,6 +18,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    // Add fields parameter to ensure we get rating and user_ratings_total
     let url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query)}&location=${lat},${lng}&radius=${radius}&key=${googleMaps.apiKey}`
     
     if (type) {
@@ -26,6 +27,18 @@ export async function GET(request: NextRequest) {
 
     const response = await fetch(url)
     const data = await response.json()
+    
+    // Log sample response to debug
+    if (data.results && data.results.length > 0) {
+      const sample = data.results[0]
+      console.log(`[API Server] Google Places Text Search sample response:`, {
+        name: sample.name,
+        rating: sample.rating,
+        user_ratings_total: sample.user_ratings_total,
+        place_id: sample.place_id,
+      })
+    }
+    
     return NextResponse.json(data)
   } catch (error) {
     console.error('Places search error:', error)

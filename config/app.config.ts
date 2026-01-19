@@ -15,6 +15,7 @@ import { performance } from './performance'
 import { ui } from './ui'
 import { gemini } from './gemini'
 import { googleMaps } from './google-maps'
+import { themes } from './themes'
 
 export const appConfig = {
   app: appInfo,
@@ -40,6 +41,7 @@ export const appConfig = {
   ui,
   gemini,
   googleMaps,
+  themes,
 }
 
 export default appConfig
@@ -47,4 +49,4 @@ export default appConfig
 // Re-export individual configs for direct imports
 export { appInfo, pricing, social, navigation, hero, features, howItWorks, groupPromo }
 export { defaultTrip, sampleLocations, sampleGroups, sampleDiscoverItems, placeholderImages, discoverItems }
-export { api, featureFlags, animations, performance, ui, gemini, googleMaps }
+export { api, featureFlags, animations, performance, ui, gemini, googleMaps, themes }

@@ -108,14 +108,58 @@ function incrementRequestAttempt() {
   // Power /admin hourly chart with real request volume
   incrementHourlyUsage(1)
   saveUsageStats()
+  // Debug log to verify tracking
+  if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+    console.log('Gemini API usage tracked:', {
+      requestsToday: usageStats.requestsToday,
+      tokensToday: usageStats.tokensToday,
+      requestsThisMinute: usageStats.requestsThisMinute,
+    })
+  }
 }
 
 function addTokens(estimatedTokens: number) {
   usageStats.tokensToday += estimatedTokens
   saveUsageStats()
+  // Debug log to verify tracking
+  if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+    console.log('Gemini tokens tracked:', {
+      tokensToday: usageStats.tokensToday,
+      added: estimatedTokens,
+    })
+  }
 }
 
 export function getUsageStats(): UsageStats {
+  // Reload from localStorage to ensure we have the latest data
+  if (typeof window !== 'undefined') {
+    const saved = localStorage.getItem('gemini_usage_stats')
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved)
+        const today = new Date().toDateString()
+        const savedDate = parsed.date
+        if (savedDate === today) {
+          // Update in-memory stats from localStorage
+          usageStats = { 
+            ...parsed.stats, 
+            lastRequestTime: usageStats.lastRequestTime, 
+            requestsThisMinute: usageStats.requestsThisMinute 
+          }
+        } else {
+          // New day - reset stats
+          usageStats = {
+            requestsToday: 0,
+            tokensToday: 0,
+            requestsThisMinute: 0,
+            lastRequestTime: 0,
+          }
+        }
+      } catch (e) {
+        console.warn('Error loading Gemini usage stats from localStorage:', e)
+      }
+    }
+  }
   checkGeminiMinuteLimit()
   return { ...usageStats }
 }

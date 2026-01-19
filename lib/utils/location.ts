@@ -1,72 +1,85 @@
 // Location utility functions
 
+/**
+ * Creates a properly formatted Google Maps location string
+ * Coordinates should NOT be encoded, names/addresses should be encoded
+ */
+function formatLocationForUrl(location: { name: string; lat?: number; lng?: number; address?: string }): string {
+  // If we have coordinates, use them directly (no encoding needed)
+  if (location.lat != null && location.lng != null && 
+      typeof location.lat === 'number' && typeof location.lng === 'number' &&
+      !isNaN(location.lat) && !isNaN(location.lng)) {
+    return `${location.lat},${location.lng}`
+  }
+  
+  // Otherwise, use name or address and encode it
+  const query = location.address || location.name
+  return encodeURIComponent(query)
+}
+
+/**
+ * Opens a location in Google Maps
+ */
 export function openInGoogleMaps(location: { name: string; lat?: number; lng?: number; address?: string }) {
   if (typeof window === 'undefined') return
   
-  if (location.lat && location.lng) {
-    window.open(`https://www.google.com/maps?q=${location.lat},${location.lng}`, '_blank')
-  } else if (location.address) {
-    window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location.address)}`, '_blank')
+  const locationStr = formatLocationForUrl(location)
+  
+  // Use coordinates format if we have them, otherwise use search format
+  if (location.lat != null && location.lng != null && 
+      typeof location.lat === 'number' && typeof location.lng === 'number' &&
+      !isNaN(location.lat) && !isNaN(location.lng)) {
+    window.open(`https://www.google.com/maps?q=${locationStr}`, '_blank')
   } else {
-    window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location.name)}`, '_blank')
+    window.open(`https://www.google.com/maps/search/?api=1&query=${locationStr}`, '_blank')
   }
 }
 
-export function createGoogleMapsList(locations: Array<{ name: string; lat?: number; lng?: number }>) {
+export function createGoogleMapsList(
+  locations: Array<{ name: string; lat?: number; lng?: number; address?: string }>,
+  travelMode: 'walking' | 'driving' | 'bicycling' | 'transit' | 'mixed' = 'walking'
+) {
   if (typeof window === 'undefined') return null
   
   if (locations.length === 0) {
     return null
   }
 
-  // Create a Google Maps URL with all locations
-  // Google Maps supports multiple locations in a single URL using the "place" parameter
-  // Format: https://www.google.com/maps/search/?api=1&query=... for single location
-  // For multiple locations, we'll create a directions URL with all locations as waypoints
-  
+  // Single location - use simple search or coordinate format
   if (locations.length === 1) {
     const loc = locations[0]
-    if (loc.lat && loc.lng) {
-      return `https://www.google.com/maps?q=${loc.lat},${loc.lng}`
+    const locationStr = formatLocationForUrl(loc)
+    
+    if (loc.lat != null && loc.lng != null && 
+        typeof loc.lat === 'number' && typeof loc.lng === 'number' &&
+        !isNaN(loc.lat) && !isNaN(loc.lng)) {
+      return `https://www.google.com/maps?q=${locationStr}`
     }
-    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(loc.name)}`
+    return `https://www.google.com/maps/search/?api=1&query=${locationStr}`
   }
 
-  // For multiple locations, create a route with all locations
+  // Multiple locations - create a directions URL
   // Use first location as origin, last as destination, and others as waypoints
   const origin = locations[0]
   const destination = locations[locations.length - 1]
   const waypoints = locations.slice(1, -1)
 
-  let originStr: string
-  if (origin.lat && origin.lng) {
-    originStr = `${origin.lat},${origin.lng}`
-  } else {
-    originStr = encodeURIComponent(origin.name)
-  }
-
-  let destStr: string
-  if (destination.lat && destination.lng) {
-    destStr = `${destination.lat},${destination.lng}`
-  } else {
-    destStr = encodeURIComponent(destination.name)
-  }
+  const originStr = formatLocationForUrl(origin)
+  const destStr = formatLocationForUrl(destination)
 
   let waypointsStr = ''
   if (waypoints.length > 0) {
-    waypointsStr = waypoints.map(loc => {
-      if (loc.lat && loc.lng) {
-        return `${loc.lat},${loc.lng}`
-      }
-      return encodeURIComponent(loc.name)
-    }).join('|')
+    waypointsStr = waypoints.map(loc => formatLocationForUrl(loc)).join('|')
   }
 
   // Google Maps Directions URL with waypoints
+  // Note: waypoints parameter should use | separator, and each waypoint should be properly formatted
+  // Map 'mixed' mode to 'driving' for Google Maps (mixed isn't a valid mode)
+  const googleMapsMode = travelMode === 'mixed' ? 'driving' : travelMode
   if (waypointsStr) {
-    return `https://www.google.com/maps/dir/?api=1&origin=${originStr}&destination=${destStr}&waypoints=${waypointsStr}&travelmode=walking`
+    return `https://www.google.com/maps/dir/?api=1&origin=${originStr}&destination=${destStr}&waypoints=${waypointsStr}&travelmode=${googleMapsMode}`
   } else {
-    return `https://www.google.com/maps/dir/?api=1&origin=${originStr}&destination=${destStr}&travelmode=walking`
+    return `https://www.google.com/maps/dir/?api=1&origin=${originStr}&destination=${destStr}&travelmode=${googleMapsMode}`
   }
 }
 
@@ -106,7 +119,8 @@ export function generateAlternativeLocation(currentLocation: { name: string; tag
  * The route will start and end at the first location, visiting all selected locations
  */
 export function createCircularGoogleMapsRoute(
-  locations: Array<{ name: string; lat?: number; lng?: number; address?: string }>
+  locations: Array<{ name: string; lat?: number; lng?: number; address?: string }>,
+  travelMode: 'walking' | 'driving' | 'bicycling' | 'transit' | 'mixed' = 'walking'
 ): string {
   if (locations.length === 0) {
     return 'https://www.google.com/maps'
@@ -114,10 +128,14 @@ export function createCircularGoogleMapsRoute(
 
   if (locations.length === 1) {
     const loc = locations[0]
-    if (loc.lat && loc.lng) {
-      return `https://www.google.com/maps?q=${loc.lat},${loc.lng}`
+    const locationStr = formatLocationForUrl(loc)
+    
+    if (loc.lat != null && loc.lng != null && 
+        typeof loc.lat === 'number' && typeof loc.lng === 'number' &&
+        !isNaN(loc.lat) && !isNaN(loc.lng)) {
+      return `https://www.google.com/maps?q=${locationStr}`
     }
-    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(loc.name)}`
+    return `https://www.google.com/maps/search/?api=1&query=${locationStr}`
   }
 
   // For circular route, we need to:
@@ -126,23 +144,31 @@ export function createCircularGoogleMapsRoute(
   const origin = locations[0]
   const waypoints = locations.slice(1)
 
-  // Build waypoints string
-  const waypointQueries = waypoints.map(loc => {
-    if (loc.lat && loc.lng) {
-      return `${loc.lat},${loc.lng}`
-    }
-    return encodeURIComponent(loc.name)
-  }).join('|')
+  // Build waypoints string - properly format each waypoint
+  const waypointQueries = waypoints.map(loc => formatLocationForUrl(loc)).join('|')
 
-  // Build origin/destination
-  let originStr: string
-  if (origin.lat && origin.lng) {
-    originStr = `${origin.lat},${origin.lng}`
-  } else {
-    originStr = encodeURIComponent(origin.name)
-  }
+  // Build origin/destination - properly format
+  const originStr = formatLocationForUrl(origin)
 
   // Google Maps Directions URL format:
-  // https://www.google.com/maps/dir/?api=1&origin=...&destination=...&waypoints=...&travelmode=walking
-  return `https://www.google.com/maps/dir/?api=1&origin=${originStr}&destination=${originStr}&waypoints=${waypointQueries}&travelmode=walking`
+  // https://www.google.com/maps/dir/?api=1&origin=...&destination=...&waypoints=...&travelmode=...
+  // Map 'mixed' mode to 'driving' for Google Maps (mixed isn't a valid mode)
+  const googleMapsMode = travelMode === 'mixed' ? 'driving' : travelMode
+  return `https://www.google.com/maps/dir/?api=1&origin=${originStr}&destination=${originStr}&waypoints=${waypointQueries}&travelmode=${googleMapsMode}`
+}
+
+/**
+ * Creates a simple Google Maps URL for a single location (coordinates or name)
+ * Use this for creating links to locations
+ */
+export function createGoogleMapsUrl(location: { name: string; lat?: number; lng?: number; address?: string }): string {
+  const locationStr = formatLocationForUrl(location)
+  
+  // Use coordinates format if we have them, otherwise use search format
+  if (location.lat != null && location.lng != null && 
+      typeof location.lat === 'number' && typeof location.lng === 'number' &&
+      !isNaN(location.lat) && !isNaN(location.lng)) {
+    return `https://www.google.com/maps?q=${locationStr}`
+  }
+  return `https://www.google.com/maps/search/?api=1&query=${locationStr}`
 }

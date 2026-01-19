@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { GoogleAuth } from 'google-auth-library'
+import { withAdmin } from '@/lib/auth/server'
 
 interface GCPUsageData {
   gemini?: {
@@ -32,7 +33,7 @@ interface GCPUsageData {
  *    Option B: Run `gcloud auth application-default login` for local dev
  * 3. Enable Cloud Monitoring API in your GCP project
  */
-export async function GET(request: NextRequest) {
+async function handleGet(request: NextRequest) {
   const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID || process.env.GCLOUD_PROJECT
   
   if (!projectId) {
@@ -124,6 +125,9 @@ export async function GET(request: NextRequest) {
     } as GCPUsageData, { status: 200 })
   }
 }
+
+// Export with admin protection
+export const GET = withAdmin(handleGet)
 
 /**
  * Get OAuth2 access token for GCP API calls

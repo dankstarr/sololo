@@ -10,8 +10,14 @@ Sololo persists **trips, selected locations, generated itineraries, groups**, an
 
 ### 2) Apply the database schema
 
+**⚠️ Important**: If you already have a database, see [DATABASE_MIGRATION_GUIDE.md](./DATABASE_MIGRATION_GUIDE.md) for step-by-step instructions.
+
+**Quick Steps:**
 - In Supabase Dashboard → **SQL Editor**, run:
-  - `supabase/schema.sql`
+  1. First: `supabase/schema.sql` (creates all tables)
+  2. Then: `supabase/enhancements.sql` (adds optimizations)
+
+**Both files are safe to run** - they use `IF NOT EXISTS` so they won't overwrite your existing data.
 
 ### 3) Configure environment variables
 

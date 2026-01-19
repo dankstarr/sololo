@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { supabaseCache, CACHE_TTL } from '@/lib/utils/supabase-cache'
+import { withAdmin, withAuth, verifyOwnership } from '@/lib/auth/server'
 
 // GET all cities with their location counts
 export async function GET(req: NextRequest) {
@@ -25,8 +26,8 @@ export async function GET(req: NextRequest) {
         .from('city_locations')
         .select('*')
         .eq('city_id', cityId)
-        .order('reviews', { ascending: false })
-        .order('rating', { ascending: false })
+        .order('reviews', { ascending: false, nullsFirst: false })
+        .order('rating', { ascending: false, nullsFirst: false })
 
       if (locError) {
         // If table doesn't exist, return empty array
@@ -39,7 +40,29 @@ export async function GET(req: NextRequest) {
       }
 
       const result = locations || []
-      // Cache the result
+      
+      // Log detailed information for debugging
+      console.log(`[API Server] GET /api/cities?cityId=${cityId} - Query result: ${result.length} locations`)
+      if (result.length === 0) {
+        // Check if city exists
+        const { data: cityData } = await supabase
+          .from('cities')
+          .select('id, name, country')
+          .eq('id', cityId)
+          .maybeSingle()
+        
+        if (!cityData) {
+          console.warn(`[API Server] City with id=${cityId} does not exist in database`)
+        } else {
+          console.warn(`[API Server] City "${cityData.name}" exists but has no locations saved. City ID: ${cityId}`)
+        }
+      } else {
+        // Log sample data to verify reviews are correct
+        const sample = result[0]
+        console.log(`[API Server] Sample location from DB: "${sample.name}" - rating: ${sample.rating}, reviews: ${sample.reviews} (type: rating=${typeof sample.rating}, reviews=${typeof sample.reviews})`)
+      }
+      
+      // Cache the result (even if empty)
       supabaseCache.set(cacheKey, result, CACHE_TTL.CITY_LOCATIONS)
       console.log(`[API Server] GET /api/cities?cityId=${cityId} - Success - Found ${result.length} locations, cached`)
 
@@ -245,19 +268,35 @@ export async function POST(req: NextRequest) {
     }
 
     // Insert locations
-    const locationRows = locations.map((loc: any) => ({
-      city_id: cityId,
-      name: loc.name || '',
-      category: loc.category || 'Attraction',
-      description: loc.description || null,
-      rating: Number(loc.rating) || 0,
-      reviews: Number(loc.reviews) || 0,
-      lat: loc.lat ? Number(loc.lat) : null,
-      lng: loc.lng ? Number(loc.lng) : null,
-      distance: loc.distance || null,
-      image: loc.image || null,
-      place_id: loc.placeId || null,
-    }))
+    const locationRows = locations.map((loc: any, idx: number) => {
+      // Ensure proper numeric conversion - only convert if value exists and is valid
+      // Don't default to 0 - use null/undefined so we know data is missing
+      const rating = loc.rating != null && loc.rating !== '' && !isNaN(Number(loc.rating)) && Number(loc.rating) > 0 
+        ? Number(loc.rating) 
+        : null
+      const reviews = loc.reviews != null && loc.reviews !== '' && !isNaN(Number(loc.reviews)) && Number(loc.reviews) > 0
+        ? Number(loc.reviews)
+        : null
+      
+      // Log sample to verify data (only log first one)
+      if (idx === 0) {
+        console.log(`[API Server] Sample location being saved: "${loc.name}" - rating: ${rating} (raw: ${loc.rating}), reviews: ${reviews} (raw: ${loc.reviews}), place_id: ${loc.placeId || 'missing'}`)
+      }
+      
+      return {
+        city_id: cityId,
+        name: loc.name || '',
+        category: loc.category || 'Attraction',
+        description: loc.description || null,
+        rating: rating,
+        reviews: reviews,
+        lat: loc.lat ? Number(loc.lat) : null,
+        lng: loc.lng ? Number(loc.lng) : null,
+        distance: loc.distance || null,
+        image: loc.image || null,
+        place_id: loc.placeId || null, // Save place_id for enrichment
+      }
+    })
 
     const { error: locError } = await supabase
       .from('city_locations')
@@ -286,3 +325,84 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
+
+// DELETE - Delete a location or city (admin only)
+async function handleDelete(req: NextRequest) {
+  try {
+    const searchParams = req.nextUrl.searchParams
+    const locationId = searchParams.get('locationId')
+    const cityId = searchParams.get('cityId')
+
+    if (!locationId && !cityId) {
+      return NextResponse.json({ error: 'locationId or cityId is required' }, { status: 400 })
+    }
+
+    const supabase = supabaseAdmin()
+
+    // Delete a specific location
+    if (locationId) {
+      console.log(`[API Server] DELETE /api/cities?locationId=${locationId} - Deleting location`)
+      
+      const { error } = await supabase
+        .from('city_locations')
+        .delete()
+        .eq('id', locationId)
+
+      if (error) {
+        console.error('Error deleting location:', error)
+        return NextResponse.json({ error: 'Failed to delete location' }, { status: 500 })
+      }
+
+      // Invalidate caches
+      supabaseCache.invalidate('city_locations')
+      supabaseCache.invalidate('cities:list')
+      
+      console.log(`[API Server] DELETE /api/cities?locationId=${locationId} - Success`)
+      return NextResponse.json({ success: true, message: 'Location deleted' }, { status: 200 })
+    }
+
+    // Delete an entire city and all its locations
+    if (cityId) {
+      console.log(`[API Server] DELETE /api/cities?cityId=${cityId} - Deleting city and all locations`)
+      
+      // Delete locations first (cascade should handle this, but being explicit)
+      const { error: locError } = await supabase
+        .from('city_locations')
+        .delete()
+        .eq('city_id', cityId)
+
+      if (locError) {
+        console.error('Error deleting city locations:', locError)
+        // Continue anyway - try to delete city
+      }
+
+      // Delete the city
+      const { error: cityError } = await supabase
+        .from('cities')
+        .delete()
+        .eq('id', cityId)
+
+      if (cityError) {
+        console.error('Error deleting city:', cityError)
+        return NextResponse.json({ error: 'Failed to delete city' }, { status: 500 })
+      }
+
+      // Invalidate caches
+      supabaseCache.invalidate('city_locations')
+      supabaseCache.invalidate('cities:list')
+      
+      console.log(`[API Server] DELETE /api/cities?cityId=${cityId} - Success`)
+      return NextResponse.json({ success: true, message: 'City and all locations deleted' }, { status: 200 })
+    }
+
+    return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
+  } catch (e) {
+    console.error('Error in DELETE /api/cities:', e)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}
+
+// Export routes with appropriate protection
+// GET and POST are public (for reading/searching cities)
+// DELETE requires admin access
+export const DELETE = withAdmin(handleDelete)

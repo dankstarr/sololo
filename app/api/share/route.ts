@@ -20,18 +20,66 @@ export async function POST(request: NextRequest) {
 
     // If Supabase isn't configured (local/dev), fall back to in-memory store.
     let shareId: string
+    const userId = body.userId || body.createdBy || null
+    
     try {
       const supabase = supabaseAdmin()
-      shareId = crypto.randomUUID()
-      const { error } = await supabase.from('shared_itineraries').insert({
-        id: shareId,
-        trip,
-        locations: locations || [],
-        itinerary,
-      })
-      if (error) throw error
+      shareId = body.shareId || crypto.randomUUID()
       
-      // Invalidate shared itineraries list cache since we added a new one
+      // Check if itinerary already exists (for updates)
+      const { data: existing } = await supabase
+        .from('shared_itineraries')
+        .select('*')
+        .eq('id', shareId)
+        .maybeSingle()
+      
+      if (existing) {
+        // Update existing itinerary
+        const { error } = await supabase
+          .from('shared_itineraries')
+          .update({
+            trip,
+            locations: locations || [],
+            itinerary,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', shareId)
+        
+        if (error) throw error
+        
+        // Create edit history entry if userId is provided
+        if (userId && body.actionType) {
+          await supabase.from('itinerary_edit_history').insert({
+            itinerary_id: shareId,
+            user_id: userId,
+            action_type: body.actionType || 'itinerary_updated',
+            details: body.details || {},
+            previous_state: body.previousState || null,
+          })
+        }
+      } else {
+        // Create new itinerary
+        const { error } = await supabase.from('shared_itineraries').insert({
+          id: shareId,
+          trip,
+          locations: locations || [],
+          itinerary,
+          created_by: userId,
+        })
+        if (error) throw error
+        
+        // Add creator as admin collaborator if userId is provided
+        if (userId) {
+          await supabase.from('itinerary_collaborators').insert({
+            itinerary_id: shareId,
+            user_id: userId,
+            role: 'admin',
+            joined_at: new Date().toISOString(),
+          })
+        }
+      }
+      
+      // Invalidate shared itineraries list cache since we added/updated one
       supabaseCache.invalidate('shared_itineraries:list')
     } catch (e) {
       shareId = storeSharedItinerary({ trip, locations: locations || [], itinerary })
