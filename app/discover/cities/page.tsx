@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { MapPin, Loader2, ExternalLink, Star, Calendar, TrendingUp, RefreshCw, Search } from 'lucide-react'
+import { MapPin, Loader2, ExternalLink, Star, Calendar, TrendingUp, RefreshCw, Search, ArrowLeft } from 'lucide-react'
 import { Card, Badge, Button, Input } from '@/components/ui'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -229,6 +229,15 @@ export default function DiscoverCitiesPage() {
         <div className="container mx-auto px-4 sm:px-6 py-6">
           <div className="flex items-center justify-between mb-4">
             <div>
+              <div className="flex items-center gap-3 mb-2">
+                <button
+                  onClick={() => router.push('/discover')}
+                  className="text-gray-600 hover:text-gray-900 flex items-center gap-2 text-sm font-medium"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  Back to Discover
+                </button>
+              </div>
               <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
                 Discover Cities
               </h1>
@@ -236,12 +245,20 @@ export default function DiscoverCitiesPage() {
                 Explore {filteredAndSortedCities.length} cit{filteredAndSortedCities.length !== 1 ? 'ies' : 'y'} with saved locations
               </p>
             </div>
-            <Link
-              href="/discover/locations"
-              className="px-4 py-2 bg-primary text-white rounded-lg font-semibold hover:bg-primary-600 transition-colors text-sm whitespace-nowrap"
-            >
-              View Locations
-            </Link>
+            <div className="flex items-center gap-2">
+              <Link
+                href="/discover/locations"
+                className="px-4 py-2 bg-primary text-white rounded-lg font-semibold hover:bg-primary-600 transition-colors text-sm whitespace-nowrap"
+              >
+                View Locations
+              </Link>
+              <Link
+                href="/app/home"
+                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200 transition-colors text-sm whitespace-nowrap"
+              >
+                Plan Trip
+              </Link>
+            </div>
           </div>
 
           {/* Search and Filters */}

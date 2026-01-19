@@ -1,8 +1,10 @@
 'use client'
 
 import { useState, useMemo, useEffect } from 'react'
-import { Search, MapPin, Star, Filter, X } from 'lucide-react'
-import { Input, Badge, ScrollArea, Card, Slider, ToggleGroup, ToggleGroupItem, Drawer, DrawerContent } from '@/components/ui'
+import { useRouter } from 'next/navigation'
+import Link from 'next/link'
+import { Search, MapPin, Star, Filter, X, ArrowLeft, Home, Map, Calendar, Compass } from 'lucide-react'
+import { Input, Badge, ScrollArea, Card, Slider, ToggleGroup, ToggleGroupItem, Drawer, DrawerContent, Button } from '@/components/ui'
 import { londonLocations, NearbyLocation } from '@/config/nearby-locations'
 import { getImageUrl } from '@/lib/utils'
 import Image from 'next/image'
@@ -11,6 +13,7 @@ type FilterType = 'all' | 'best' | 'top-rated' | 'hidden-gems'
 type SortType = 'distance' | 'rating' | 'reviews'
 
 export default function NearbyDiscovery() {
+  const router = useRouter()
   const [searchQuery, setSearchQuery] = useState('')
   const [activeFilter, setActiveFilter] = useState<FilterType>('all')
   const [selectedLocation, setSelectedLocation] = useState<string | null>(null)
@@ -128,6 +131,30 @@ export default function NearbyDiscovery() {
       <div className="w-[40%] flex flex-col border-r border-border bg-background">
         {/* Sticky Header */}
         <div className="sticky top-0 z-10 bg-background border-b border-border p-4 space-y-4">
+          {/* Navigation Header */}
+          <div className="flex items-center justify-between mb-2">
+            <button
+              onClick={() => router.back()}
+              className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Back
+            </button>
+            <div className="flex items-center gap-2">
+              <Link href="/app/home" className="p-2 text-muted-foreground hover:text-foreground transition-colors" title="Home">
+                <Home className="w-4 h-4" />
+              </Link>
+              <Link href="/app/itinerary" className="p-2 text-muted-foreground hover:text-foreground transition-colors" title="Itinerary">
+                <Calendar className="w-4 h-4" />
+              </Link>
+              <Link href="/app/map" className="p-2 text-muted-foreground hover:text-foreground transition-colors" title="Map">
+                <Map className="w-4 h-4" />
+              </Link>
+              <Link href="/discover" className="p-2 text-muted-foreground hover:text-foreground transition-colors" title="Discover">
+                <Compass className="w-4 h-4" />
+              </Link>
+            </div>
+          </div>
           <Input
             placeholder="Search cities..."
             value={searchQuery}
@@ -212,6 +239,15 @@ export default function NearbyDiscovery() {
     <div className="h-screen flex flex-col">
       {/* Map - Top */}
       <div className="flex-1 bg-secondary relative">
+        {/* Back Button */}
+        <div className="absolute top-4 left-4 z-10">
+          <button
+            onClick={() => router.back()}
+            className="p-2 bg-white/90 backdrop-blur-sm rounded-full shadow-lg text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+        </div>
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="text-center text-muted-foreground">
             <MapPin className="w-16 h-16 mx-auto mb-4 opacity-50" />

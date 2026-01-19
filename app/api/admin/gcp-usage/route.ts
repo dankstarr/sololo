@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { GoogleAuth } from 'google-auth-library'
 import { withAdmin } from '@/lib/auth/server'
 
+// Force dynamic rendering - this route requires authentication
+export const dynamic = 'force-dynamic'
+
 interface GCPUsageData {
   gemini?: {
     requestsToday: number

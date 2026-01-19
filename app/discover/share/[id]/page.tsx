@@ -103,13 +103,29 @@ export default function SharedItineraryPage() {
     <main className="min-h-screen bg-background">
       <div className="container mx-auto px-6 py-8">
         <div className="max-w-4xl mx-auto">
-          <button
-            onClick={() => router.back()}
-            className="text-gray-600 hover:text-gray-900 mb-6 flex items-center gap-2 text-sm font-medium"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Back
-          </button>
+          <div className="flex items-center justify-between mb-6">
+            <button
+              onClick={() => router.back()}
+              className="text-gray-600 hover:text-gray-900 flex items-center gap-2 text-sm font-medium"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Back
+            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => router.push('/discover')}
+                className="px-3 py-1.5 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                Discover
+              </button>
+              <button
+                onClick={() => router.push('/app/home')}
+                className="px-3 py-1.5 text-sm bg-primary text-white rounded-lg hover:bg-primary-600 transition-colors"
+              >
+                Plan Trip
+              </button>
+            </div>
+          </div>
 
           <div className="bg-white rounded-xl shadow-lg p-8 mb-6">
             <div className="flex items-start justify-between mb-6">

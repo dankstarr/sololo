@@ -1,6 +1,7 @@
 'use client'
 
 import Image from 'next/image'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
 import { User, MapPin, Calendar, Heart, Bookmark, Route, ArrowLeft, Sparkles, Map, MoreVertical, Share2, Trash2, Copy, Link as LinkIcon, Settings, Edit, Lock, Bell, Shield, Download, LogOut, Mail, Key, Globe, Moon, Sun } from 'lucide-react'
@@ -574,6 +575,24 @@ export default function ProfilePage() {
   return (
     <main className="min-h-screen bg-background">
       <div className="container mx-auto px-4 sm:px-6 py-8 sm:py-12">
+        {/* Quick Navigation */}
+        <div className="mb-6 flex items-center gap-2 flex-wrap">
+          <Link href="/app/home" className="px-3 py-1.5 text-sm bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors">
+            Home
+          </Link>
+          <Link href="/app/itinerary" className="px-3 py-1.5 text-sm bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors">
+            Itinerary
+          </Link>
+          <Link href="/app/map" className="px-3 py-1.5 text-sm bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors">
+            Map
+          </Link>
+          <Link href="/app/groups" className="px-3 py-1.5 text-sm bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors">
+            Groups
+          </Link>
+          <Link href="/discover" className="px-3 py-1.5 text-sm bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors">
+            Discover
+          </Link>
+        </div>
         {/* Header */}
         <div className="mb-6 flex items-center justify-between gap-4">
           <button

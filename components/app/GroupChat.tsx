@@ -34,6 +34,7 @@ export default function GroupChat() {
   const router = useRouter()
   const params = useParams()
   const { currentGroup } = useAppStore()
+  const groupId = params?.id as string
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
@@ -154,6 +155,14 @@ export default function GroupChat() {
       {/* Header */}
       <div className="bg-white border-b border-gray-200 p-4">
         <div className="container mx-auto">
+          {/* Back Button */}
+          <button
+            onClick={() => router.push('/app/groups')}
+            className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 mb-3 transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back to Groups
+          </button>
           <button
             onClick={() => router.push('/app/groups')}
             className="text-gray-600 hover:text-gray-900 mb-3 flex items-center gap-2 text-sm font-medium"
