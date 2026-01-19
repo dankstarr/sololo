@@ -2,14 +2,14 @@
 
 ## Quick Setup
 
-Create a `.env.local` file in the root directory with the following content:
+Create a `.env.local` file in the root directory with the following content (replace the placeholder values with your **real** keys, but never commit those real keys to Git):
 
 ```env
 # Google Maps API Configuration
-NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=AIzaSyCXF2lDYV3Siobpg_zHISKP2aTBmLV8668
+NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=your_google_maps_api_key_here
 
 # Gemini AI Configuration
-NEXT_PUBLIC_GEMINI_API_KEY=AIzaSyBe2lUFOBEHhNkGce-lPPYy0-b48GyKu6o
+NEXT_PUBLIC_GEMINI_API_KEY=your_gemini_api_key_here
 ```
 
 ## Steps to Create .env.local
@@ -19,15 +19,17 @@ NEXT_PUBLIC_GEMINI_API_KEY=AIzaSyBe2lUFOBEHhNkGce-lPPYy0-b48GyKu6o
 3. Save the file
 4. Restart your Next.js dev server (`npm run dev`)
 
-## Current API Keys
+## Current API Keys (Security-Friendly)
+
+> Important: Never commit real API keys to the repository. Use placeholders locally and set real values only in `.env.local` and in your hosting platform (e.g., Vercel Project Settings → Environment Variables).
 
 ### Google Maps API
-- **Key**: `AIzaSyCXF2lDYV3Siobpg_zHISKP2aTBmLV8668`
+- **Env var**: `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`
 - **Used in**: `config/google-maps.ts`
 - **Accessed via**: `process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`
 
 ### Gemini AI API
-- **Key**: `AIzaSyBe2lUFOBEHhNkGce-lPPYy0-b48GyKu6o`
+- **Env var**: `NEXT_PUBLIC_GEMINI_API_KEY`
 - **Used in**: `config/gemini.ts`
 - **Accessed via**: `process.env.NEXT_PUBLIC_GEMINI_API_KEY`
 
