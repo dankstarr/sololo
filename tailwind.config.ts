@@ -81,8 +81,8 @@ const config: Config = {
           '50%': { transform: 'translateY(-10px)' },
         },
         breathing: {
-          '0%, 100%': { opacity: 1, transform: 'scale(1)' },
-          '50%': { opacity: 0.8, transform: 'scale(1.05)' },
+          '0%, 100%': { opacity: '1', transform: 'scale(1)' },
+          '50%': { opacity: '0.8', transform: 'scale(1.05)' },
         },
       },
     },

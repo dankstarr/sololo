@@ -114,7 +114,7 @@ export default function LocationSelection() {
           reasoning.failStep(step3Id, 'Location not found on Google Maps, using fallback')
           
           // Fallback to local generation
-          const alternative = generateAlt(location)
+          const alternative = generateAlt({ name: location.name, tags: location.tags || [] })
           setLocations((prev) =>
             prev.map((loc) =>
               loc.id === id
@@ -136,7 +136,7 @@ export default function LocationSelection() {
         })
         reasoning.startStep(step2Id)
         
-        const alternative = generateAlt(location)
+        const alternative = generateAlt({ name: location.name, tags: location.tags || [] })
         reasoning.completeStep(step2Id, `Generated alternative: ${alternative.name}`)
         
         setLocations((prev) =>
@@ -162,7 +162,7 @@ export default function LocationSelection() {
       reasoning.failStep(errorStepId, error instanceof Error ? error.message : 'Unknown error')
       
       // Fallback
-      const alternative = generateAlt(location)
+      const alternative = generateAlt({ name: location.name, tags: location.tags || [] })
       setLocations((prev) =>
         prev.map((loc) =>
           loc.id === id

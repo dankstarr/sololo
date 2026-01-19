@@ -55,13 +55,6 @@ export default function Pricing() {
                   ? 'border-primary-600 md:scale-105'
                   : 'border-gray-300'
               }`}
-              style={{ 
-                backgroundColor: '#FFFFFF', 
-                borderColor: plan.popular ? '#2D5A27' : '#D1D5DB',
-                boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
-                position: 'relative',
-                zIndex: 10
-              }}
               initial={{ opacity: 1, y: 0 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: '-50px' }}

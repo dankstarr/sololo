@@ -3,7 +3,11 @@
 import * as React from 'react'
 import { cn } from '@/lib/utils/cn'
 
-export interface SliderProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'type'> {
+export interface SliderProps
+  extends Omit<
+    React.InputHTMLAttributes<HTMLInputElement>,
+    'type' | 'value' | 'defaultValue' | 'onChange'
+  > {
   value?: number[]
   onValueChange?: (value: number[]) => void
   min?: number

@@ -1,15 +1,16 @@
 'use client'
 
-import { ButtonHTMLAttributes, ReactNode } from 'react'
-import { m } from 'framer-motion'
+import { ReactNode } from 'react'
+import { m, type HTMLMotionProps } from 'framer-motion'
 
-interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+interface ButtonProps extends Omit<HTMLMotionProps<'button'>, 'children'> {
   variant?: 'primary' | 'secondary' | 'outline' | 'ghost'
   size?: 'small' | 'medium' | 'large'
   icon?: ReactNode
   iconPosition?: 'left' | 'right'
   fullWidth?: boolean
   loading?: boolean
+  children?: ReactNode
 }
 
 export default function Button({

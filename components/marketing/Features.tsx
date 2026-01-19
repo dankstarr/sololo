@@ -58,7 +58,6 @@ export default function Features() {
               <m.div
                 key={index}
                 className="bg-white p-4 sm:p-6 rounded-xl shadow-lg hover:shadow-xl transition-all border-2 border-gray-200 group cursor-pointer relative z-10"
-                style={{ backgroundColor: '#FFFFFF', borderColor: '#E5E7EB', position: 'relative', zIndex: 10 }}
                 initial={{ opacity: 1, y: 0 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true, margin: '-50px' }}

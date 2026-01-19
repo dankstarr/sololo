@@ -34,7 +34,7 @@ const ToggleGroup = React.forwardRef<HTMLDivElement, ToggleGroupProps>(
           if (React.isValidElement(child) && child.type === ToggleGroupItem) {
             return React.cloneElement(child, {
               ...child.props,
-              onToggle: handleToggle,
+              onToggleValue: handleToggle,
               isSelected: type === 'single'
                 ? value === child.props.value
                 : Array.isArray(value) && value.includes(child.props.value),
@@ -50,17 +50,17 @@ ToggleGroup.displayName = 'ToggleGroup'
 
 export interface ToggleGroupItemProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   value: string
-  onToggle?: (value: string) => void
+  onToggleValue?: (value: string) => void
   isSelected?: boolean
 }
 
 const ToggleGroupItem = React.forwardRef<HTMLButtonElement, ToggleGroupItemProps>(
-  ({ className, value, onToggle, isSelected, children, ...props }, ref) => {
+  ({ className, value, onToggleValue, isSelected, children, ...props }, ref) => {
     return (
       <button
         ref={ref}
         type="button"
-        onClick={() => onToggle?.(value)}
+        onClick={() => onToggleValue?.(value)}
         className={cn(
           'px-3 py-1.5 text-sm font-medium rounded-md transition-all',
           isSelected

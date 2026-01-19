@@ -15,26 +15,16 @@ import {
 } from 'lucide-react'
 import { sampleDiscoverItems } from '@/config/sample-data'
 import { getImageUrl } from '@/lib/utils'
-
-interface DiscoverItem {
-  id: string
-  type: 'trip' | 'guide' | 'route'
-  title: string
-  destination: string
-  duration: string
-  likes: number
-  saves: number
-  views: number
-  image: string
-}
+import { DiscoverItem } from '@/types'
 
 export default function DiscoverPage() {
-  const [filter, setFilter] = useState<'all' | 'trip' | 'guide' | 'route'>(
-    'all'
-  )
+  const [filter, setFilter] = useState<'all' | 'trip' | 'guide' | 'route'>('all')
 
   const items: DiscoverItem[] = sampleDiscoverItems.map((item) => ({
     ...item,
+    // Ensure type matches DiscoverItem['type'] union
+    type: item.type as DiscoverItem['type'],
+    // Normalize image to a string URL using our helper
     image: getImageUrl(item.image, 'discover'),
   }))
 

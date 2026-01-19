@@ -48,7 +48,7 @@ export default function Input({
             'focus:ring-2 focus:ring-ring focus:border-transparent',
             'outline-none transition-all',
             error ? 'border-destructive' : 'border-input',
-            icon && 'pl-10',
+            icon ? 'pl-10' : undefined,
             className
           )}
           value={value}

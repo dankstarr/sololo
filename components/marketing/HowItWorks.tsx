@@ -46,7 +46,6 @@ export default function HowItWorks() {
               <m.div
                 key={index}
                 className="bg-gradient-to-br from-primary-50 to-white p-6 sm:p-8 rounded-2xl shadow-lg hover:shadow-xl transition-all hover:scale-105 border-2 border-primary-200 relative z-10"
-                style={{ backgroundColor: '#F0F9F0', borderColor: '#BAE6BA', position: 'relative', zIndex: 10 }}
                 initial={{ opacity: 1, y: 0 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true, margin: '-50px' }}

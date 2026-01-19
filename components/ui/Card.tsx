@@ -1,10 +1,10 @@
 'use client'
 
-import { ReactNode, HTMLAttributes } from 'react'
-import { m } from 'framer-motion'
+import { ReactNode } from 'react'
+import { m, type HTMLMotionProps } from 'framer-motion'
 import { cn } from '@/lib/utils/cn'
 
-interface CardProps extends HTMLAttributes<HTMLDivElement> {
+interface CardProps extends Omit<HTMLMotionProps<'div'>, 'children'> {
   children: ReactNode
   hover?: boolean
   padding?: 'none' | 'small' | 'medium' | 'large'

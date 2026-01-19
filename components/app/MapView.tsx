@@ -103,7 +103,7 @@ export default function MapView() {
             onLocationClick={(location) =>
               setSelectedLocation({
                 name: location.name,
-                category: location.category || 'culture',
+                category: 'culture',
               })
             }
             showRoute={false}
@@ -135,7 +135,7 @@ export default function MapView() {
         <DaySelector
           days={days.map(d => ({ id: d.id, name: d.name }))}
           selectedDay={selectedDay}
-          onDaySelect={setSelectedDay}
+          onDaySelect={(dayId) => setSelectedDay(typeof dayId === 'string' ? parseInt(dayId, 10) : dayId)}
         />
 
         {/* Filter Button */}

@@ -203,7 +203,9 @@ export default function NearbyDiscovery() {
               <ToggleGroup
                 type="single"
                 value={minReviews[0]}
-                onValueChange={(value) => setMinReviews([value || '0'])}
+                onValueChange={(value) =>
+                  setMinReviews([(typeof value === 'string' ? value : value[0]) || '0'])
+                }
               >
                 <ToggleGroupItem value="0">Any</ToggleGroupItem>
                 <ToggleGroupItem value="100">100+</ToggleGroupItem>
@@ -311,7 +313,9 @@ export default function NearbyDiscovery() {
                 <ToggleGroup
                   type="single"
                   value={minReviews[0]}
-                  onValueChange={(value) => setMinReviews([value || '0'])}
+                  onValueChange={(value) =>
+                    setMinReviews([(typeof value === 'string' ? value : value[0]) || '0'])
+                  }
                 >
                   <ToggleGroupItem value="0">Any</ToggleGroupItem>
                   <ToggleGroupItem value="100">100+</ToggleGroupItem>
