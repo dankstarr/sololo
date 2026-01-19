@@ -46,7 +46,7 @@ export default function GroupDiscovery() {
             Create a Group
           </h1>
           <p className="text-gray-600 mb-8">
-            Create a group for your trip. Others can find and join if they're
+            Create a group for your trip. Others can find and join if they’re
             going to the same place at similar dates.
           </p>
           <div className="space-y-4">

@@ -92,7 +92,7 @@ export default function TripCreation() {
           Plan Your Trip
         </h1>
         <p className="text-gray-600">
-          Tell us about your travel preferences and we'll create the perfect itinerary
+          Tell us about your travel preferences and we’ll create the perfect itinerary
         </p>
       </div>
 
@@ -299,7 +299,7 @@ export default function TripCreation() {
                     Free Limit Reached
                   </h3>
                   <p className="text-gray-700 mb-4">
-                    You've used all {itineraryCount} free itinerary generations.
+                    You’ve used all {itineraryCount} free itinerary generations.
                     Upgrade to Pro for unlimited trips, offline features, and
                     more!
                   </p>
