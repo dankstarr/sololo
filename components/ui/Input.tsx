@@ -1,6 +1,6 @@
 'use client'
 
-import { InputHTMLAttributes, LabelHTMLAttributes, ReactNode, useMemo } from 'react'
+import { InputHTMLAttributes, ReactNode, useId } from 'react'
 import { cn } from '@/lib/utils/cn'
 
 interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
@@ -23,7 +23,8 @@ export default function Input({
   onChange,
   ...props
 }: InputProps) {
-  const inputId = useMemo(() => id || `input-${Math.random().toString(36).substr(2, 9)}`, [id])
+  const reactId = useId()
+  const inputId = id || reactId
   
   return (
     <div className={fullWidth ? 'w-full' : ''}>

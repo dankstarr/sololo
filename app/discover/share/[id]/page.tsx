@@ -3,9 +3,9 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { ArrowLeft, Clock, Route, DollarSign, MapPin } from 'lucide-react'
-import Header from '@/components/marketing/Header'
 import Footer from '@/components/marketing/Footer'
 import { useAppStore } from '@/store/useAppStore'
+import { trackedFetch } from '@/lib/utils/tracked-fetch'
 
 interface SharedItinerary {
   id: string
@@ -31,7 +31,7 @@ export default function SharedItineraryPage() {
   useEffect(() => {
     const fetchSharedItinerary = async () => {
       try {
-        const response = await fetch(`/api/share?id=${params.id}`)
+        const response = await trackedFetch(`/api/share?id=${params.id}`)
         if (!response.ok) {
           throw new Error('Shared itinerary not found')
         }
@@ -73,7 +73,6 @@ export default function SharedItineraryPage() {
   if (loading) {
     return (
       <main className="min-h-screen bg-background">
-        <Header />
         <div className="container mx-auto px-6 py-12 text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
           <p className="text-gray-600">Loading shared itinerary...</p>
@@ -86,7 +85,6 @@ export default function SharedItineraryPage() {
   if (error || !itinerary) {
     return (
       <main className="min-h-screen bg-background">
-        <Header />
         <div className="container mx-auto px-6 py-12 text-center">
           <p className="text-red-600 mb-4">{error || 'Shared itinerary not found'}</p>
           <button
@@ -103,7 +101,6 @@ export default function SharedItineraryPage() {
 
   return (
     <main className="min-h-screen bg-background">
-      <Header />
       <div className="container mx-auto px-6 py-8">
         <div className="max-w-4xl mx-auto">
           <button

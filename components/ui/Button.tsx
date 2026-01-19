@@ -1,9 +1,8 @@
 'use client'
 
-import { ReactNode } from 'react'
-import { m, type HTMLMotionProps } from 'framer-motion'
+import { ReactNode, ButtonHTMLAttributes } from 'react'
 
-interface ButtonProps extends Omit<HTMLMotionProps<'button'>, 'children'> {
+interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'outline' | 'ghost'
   size?: 'small' | 'medium' | 'large'
   icon?: ReactNode
@@ -25,7 +24,7 @@ export default function Button({
   disabled,
   ...props
 }: ButtonProps) {
-  const baseStyles = 'font-semibold rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-primary-600 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2'
+  const baseStyles = 'font-semibold rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-600 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 hover-lift hover-glow active:scale-95'
   
   const variants = {
     primary: 'bg-primary-600 text-white hover:bg-primary-700',
@@ -43,11 +42,9 @@ export default function Button({
   const widthClass = fullWidth ? 'w-full' : ''
   
   return (
-    <m.button
+    <button
       className={`${baseStyles} ${variants[variant]} ${sizes[size]} ${widthClass} ${className}`}
       disabled={disabled || loading}
-      whileHover={{ scale: disabled || loading ? 1 : 1.02 }}
-      whileTap={{ scale: disabled || loading ? 1 : 0.98 }}
       {...props}
     >
       {loading ? (
@@ -65,6 +62,6 @@ export default function Button({
           {icon && iconPosition === 'right' && icon}
         </>
       )}
-    </m.button>
+    </button>
   )
 }

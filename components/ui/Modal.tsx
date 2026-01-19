@@ -1,25 +1,28 @@
 'use client'
 
-import { ReactNode, useEffect } from 'react'
-import { m } from 'framer-motion'
+import { ReactNode, useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 
 interface ModalProps {
   isOpen: boolean
   onClose: () => void
   title?: string
+  titleId?: string
   children: ReactNode
   size?: 'small' | 'medium' | 'large' | 'full'
   showCloseButton?: boolean
+  closeButtonLabel?: string
 }
 
 export default function Modal({
   isOpen,
   onClose,
   title,
+  titleId = 'modal-title',
   children,
   size = 'medium',
   showCloseButton = true,
+  closeButtonLabel = 'Close modal',
 }: ModalProps) {
   useEffect(() => {
     if (typeof document === 'undefined') return
@@ -36,6 +39,17 @@ export default function Modal({
     }
   }, [isOpen])
 
+  const [isVisible, setIsVisible] = useState(false)
+
+  useEffect(() => {
+    if (isOpen) {
+      // Trigger animation on mount
+      setTimeout(() => setIsVisible(true), 10)
+    } else {
+      setIsVisible(false)
+    }
+  }, [isOpen])
+
   if (!isOpen) return null
 
   const sizeClasses = {
@@ -46,30 +60,26 @@ export default function Modal({
   }
 
   return (
-    <m.div
-      className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
+    <div
+      className={`fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 transition-opacity duration-200 ${
+        isVisible ? 'opacity-100' : 'opacity-0'
+      }`}
       onClick={onClose}
       role="dialog"
       aria-modal="true"
-      aria-labelledby={title ? 'modal-title' : undefined}
-      transition={{ duration: 0.2 }}
+      aria-labelledby={title ? titleId : undefined}
     >
-      <m.div
-        className={`bg-white rounded-2xl shadow-2xl w-full ${sizeClasses[size]} max-h-[90vh] overflow-y-auto`}
-        initial={{ scale: 0.95, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.95, opacity: 0 }}
+      <div
+        className={`bg-white rounded-2xl shadow-2xl w-full ${sizeClasses[size]} max-h-[90vh] overflow-y-auto transition-all duration-200 ${
+          isVisible ? 'opacity-100 scale-100' : 'opacity-0 scale-95'
+        }`}
         onClick={(e) => e.stopPropagation()}
         role="document"
-        transition={{ duration: 0.2 }}
       >
         {(title || showCloseButton) && (
           <div className="sticky top-0 bg-white border-b border-gray-200 p-4 sm:p-6 flex items-center justify-between z-10">
             {title && (
-              <h2 id="modal-title" className="text-xl sm:text-2xl font-bold text-gray-900 pr-2">
+              <h2 id={titleId} className="text-xl sm:text-2xl font-bold text-gray-900 pr-2">
                 {title}
               </h2>
             )}
@@ -77,7 +87,7 @@ export default function Modal({
               <button
                 onClick={onClose}
                 className="p-2 hover:bg-gray-100 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-primary-600 focus:ring-offset-2"
-                aria-label="Close modal"
+                aria-label={closeButtonLabel}
               >
                 <X className="w-5 h-5 text-gray-600" aria-hidden="true" />
               </button>
@@ -85,7 +95,7 @@ export default function Modal({
           </div>
         )}
         <div className="p-4 sm:p-6">{children}</div>
-      </m.div>
-    </m.div>
+      </div>
+    </div>
   )
 }

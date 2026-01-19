@@ -37,7 +37,7 @@ describe('AppNav', () => {
     
     render(<AppNav />)
     
-    const homeLink = screen.getByRole('link', { name: /home/i })
+    const homeLink = screen.getByRole('link', { name: /^home$/i })
     expect(homeLink).toHaveAttribute('aria-current', 'page')
   })
 

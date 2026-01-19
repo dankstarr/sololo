@@ -60,17 +60,28 @@ const config: Config = {
       },
       animation: {
         'glitch': 'glitch 0.3s ease-in-out',
+        'glitch-slow': 'glitch 0.5s ease-in-out infinite',
         'route-draw': 'route-draw 3s ease-in-out infinite',
         'pin-bounce': 'pin-bounce 2s ease-in-out infinite',
         'breathing': 'breathing 2s ease-in-out infinite',
+        'fade-in-up': 'fade-in-up 0.6s ease-out',
+        'fade-in': 'fade-in 0.4s ease-out',
+        'slide-up': 'slide-up 0.6s ease-out',
+        'scale-in': 'scale-in 0.4s ease-out',
+        'tilt-shake': 'tilt-shake 0.5s ease-in-out',
       },
       keyframes: {
         glitch: {
-          '0%, 100%': { transform: 'translate(0)' },
-          '20%': { transform: 'translate(-2px, 2px)' },
-          '40%': { transform: 'translate(-2px, -2px)' },
-          '60%': { transform: 'translate(2px, 2px)' },
-          '80%': { transform: 'translate(2px, -2px)' },
+          '0%, 100%': { transform: 'translate(0) rotate(0deg)' },
+          '10%': { transform: 'translate(-1px, 1px) rotate(-0.5deg)' },
+          '20%': { transform: 'translate(-2px, 2px) rotate(0.5deg)' },
+          '30%': { transform: 'translate(1px, -1px) rotate(-0.5deg)' },
+          '40%': { transform: 'translate(-1px, -2px) rotate(0.5deg)' },
+          '50%': { transform: 'translate(2px, 1px) rotate(-0.5deg)' },
+          '60%': { transform: 'translate(-2px, 1px) rotate(0.5deg)' },
+          '70%': { transform: 'translate(1px, 2px) rotate(-0.5deg)' },
+          '80%': { transform: 'translate(-1px, -1px) rotate(0.5deg)' },
+          '90%': { transform: 'translate(2px, -1px) rotate(-0.5deg)' },
         },
         'route-draw': {
           '0%': { strokeDashoffset: '100%' },
@@ -84,6 +95,34 @@ const config: Config = {
           '0%, 100%': { opacity: '1', transform: 'scale(1)' },
           '50%': { opacity: '0.8', transform: 'scale(1.05)' },
         },
+        'fade-in-up': {
+          '0%': { opacity: '0', transform: 'translateY(20px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+        'fade-in': {
+          '0%': { opacity: '0' },
+          '100%': { opacity: '1' },
+        },
+        'slide-up': {
+          '0%': { opacity: '0', transform: 'translateY(30px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+        'scale-in': {
+          '0%': { opacity: '0', transform: 'scale(0.95)' },
+          '100%': { opacity: '1', transform: 'scale(1)' },
+        },
+        'tilt-shake': {
+          '0%, 100%': { transform: 'rotate(0deg)' },
+          '25%': { transform: 'rotate(-2deg)' },
+          '75%': { transform: 'rotate(2deg)' },
+        },
+      },
+      transformStyle: {
+        'preserve-3d': 'preserve-3d',
+      },
+      perspective: {
+        '1000': '1000px',
+        '2000': '2000px',
       },
     },
   },

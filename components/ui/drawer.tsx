@@ -1,7 +1,6 @@
 'use client'
 
 import * as React from 'react'
-import { m, AnimatePresence } from 'framer-motion'
 import { X } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 
@@ -31,43 +30,35 @@ const Drawer = ({ open, onOpenChange, children, side = 'bottom' }: DrawerProps) 
     left: 'top-0 left-0 bottom-0',
   }
 
-  const slideVariants = {
-    top: { y: '-100%' },
-    right: { x: '100%' },
-    bottom: { y: '100%' },
-    left: { x: '-100%' },
+  const slideClasses = {
+    top: 'animate-slide-in-from-top',
+    right: 'animate-slide-in-from-right',
+    bottom: 'animate-slide-in-from-bottom',
+    left: 'animate-slide-in-from-left',
   }
 
+  if (!open) return null
+
   return (
-    <AnimatePresence>
-      {open && (
-        <>
-          <m.div
-            className="fixed inset-0 bg-black/50 z-50"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => onOpenChange(false)}
-          />
-          <m.div
-            className={cn(
-              'fixed z-50 bg-background shadow-lg',
-              side === 'top' && 'rounded-b-3xl',
-              side === 'bottom' && 'rounded-t-3xl',
-              side === 'left' && 'rounded-r-3xl',
-              side === 'right' && 'rounded-l-3xl',
-              sideClasses[side]
-            )}
-            initial={slideVariants[side]}
-            animate={{ x: 0, y: 0 }}
-            exit={slideVariants[side]}
-            transition={{ type: 'spring', stiffness: 150, damping: 20 }}
-          >
-            {children}
-          </m.div>
-        </>
-      )}
-    </AnimatePresence>
+    <>
+      <div
+        className="fixed inset-0 bg-black/50 z-50 animate-fade-in"
+        onClick={() => onOpenChange(false)}
+      />
+      <div
+        className={cn(
+          'fixed z-50 bg-background shadow-lg transition-transform duration-300',
+          side === 'top' && 'rounded-b-3xl',
+          side === 'bottom' && 'rounded-t-3xl',
+          side === 'left' && 'rounded-r-3xl',
+          side === 'right' && 'rounded-l-3xl',
+          sideClasses[side],
+          slideClasses[side]
+        )}
+      >
+        {children}
+      </div>
+    </>
   )
 }
 

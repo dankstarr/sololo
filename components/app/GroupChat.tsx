@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
-import { m } from 'framer-motion'
 import {
   Send,
   Pin,
@@ -91,6 +90,7 @@ export default function GroupChat() {
 
   const group = currentGroup || {
     id: params?.id as string || 'default',
+    name: undefined,
     destination: 'Tokyo, Japan',
     startDate: new Date().toISOString().split('T')[0],
     endDate: new Date().toISOString().split('T')[0],
@@ -112,7 +112,7 @@ export default function GroupChat() {
             Back to Groups
           </button>
           <h1 className="text-2xl font-bold text-gray-900 mb-2">
-            {group.destination} Group
+            {group.name ? group.name : `${group.destination} Group`}
           </h1>
           <div className="flex items-center gap-4 text-sm text-gray-600">
             <div className="flex items-center gap-1">

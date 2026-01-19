@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { m } from 'framer-motion'
 import {
   ChevronDown,
   ChevronUp,
@@ -12,27 +11,41 @@ import {
   DollarSign,
   AlertCircle,
   Edit,
-  Download,
+  FileText,
   Wifi,
   WifiOff,
   ArrowLeft,
   Share2,
   Copy,
   Check,
+  Navigation,
+  X,
+  CheckCircle2,
+  Info,
 } from 'lucide-react'
 import { useAppStore } from '@/store/useAppStore'
 import { Day } from '@/types'
+import { createCircularGoogleMapsRoute } from '@/lib/utils/location'
+import { savePageAsPDF } from '@/lib/utils/pdf'
+import { trackedFetch } from '@/lib/utils/tracked-fetch'
+
+interface BannerMessage {
+  id: string
+  type: 'error' | 'success' | 'info'
+  message: string
+}
 
 export default function ItineraryOverview() {
   const router = useRouter()
   const { itinerary, currentTrip, selectedLocations, setItinerary } = useAppStore()
   const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set(['1']))
   const [isOffline, setIsOffline] = useState(false)
-  const [downloadedItems, setDownloadedItems] = useState<Set<string>>(new Set())
   const [isSharing, setIsSharing] = useState(false)
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false)
   const [shareUrl, setShareUrl] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [editingDayId, setEditingDayId] = useState<string | null>(null)
+  const [banners, setBanners] = useState<BannerMessage[]>([])
 
   // Use itinerary from store or fallback to default
   const days: Day[] = itinerary.length > 0 ? itinerary : [
@@ -68,6 +81,19 @@ export default function ItineraryOverview() {
     },
   ]
 
+  const addBanner = (type: 'error' | 'success' | 'info', message: string) => {
+    const id = Date.now().toString()
+    setBanners((prev) => [...prev, { id, type, message }])
+    // Auto-dismiss after 5 seconds
+    setTimeout(() => {
+      setBanners((prev) => prev.filter((b) => b.id !== id))
+    }, 5000)
+  }
+
+  const removeBanner = (id: string) => {
+    setBanners((prev) => prev.filter((b) => b.id !== id))
+  }
+
   const toggleDay = (dayId: string) => {
     setExpandedDays((prev) => {
       const next = new Set(prev)
@@ -80,43 +106,31 @@ export default function ItineraryOverview() {
     })
   }
 
-  const handleDownload = () => {
+  const handleSaveAsPDF = async () => {
     if (!currentTrip && itinerary.length === 0) {
-      alert('Nothing to download yet. Please generate an itinerary first.')
+      addBanner('error', 'Nothing to save yet. Please generate an itinerary first.')
       return
     }
 
-    const data = {
-      trip: currentTrip,
-      itinerary: days,
-      exportedAt: new Date().toISOString(),
-    }
-
+    setIsGeneratingPDF(true)
     try {
-      const blob = new Blob([JSON.stringify(data, null, 2)], {
-        type: 'application/json',
-      })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
       const destinationSlug =
         currentTrip?.destination
           ?.toLowerCase()
           .replace(/[^a-z0-9]+/g, '-')
           .replace(/^-|-$/g, '') || 'itinerary'
-
-      a.href = url
-      a.download = `${destinationSlug}-${currentTrip?.days || days.length}-days-itinerary.json`
-      document.body.appendChild(a)
-      a.click()
-      a.remove()
-      URL.revokeObjectURL(url)
-
-      // Mark as downloaded / offline-ready in the UI
-      setDownloadedItems(new Set(['itinerary']))
+      const filename = `${destinationSlug}-${currentTrip?.days || days.length}-days-itinerary.pdf`
+      
+      // Get the main content container (the div with max-w-4xl)
+      const contentElement = document.querySelector('.container.mx-auto.px-6.py-8 .max-w-4xl') as HTMLElement
+      await savePageAsPDF(filename, contentElement || undefined)
       setIsOffline(true)
+      addBanner('success', 'Itinerary saved as PDF successfully!')
     } catch (error) {
-      console.error('Failed to download itinerary:', error)
-      alert('Failed to download itinerary. Please try again.')
+      console.error('Failed to save PDF:', error)
+      addBanner('error', 'Failed to save PDF. Please try again.')
+    } finally {
+      setIsGeneratingPDF(false)
     }
   }
 
@@ -137,20 +151,40 @@ export default function ItineraryOverview() {
   }
 
   const handleShare = async () => {
-    if (!currentTrip || itinerary.length === 0) {
-      alert('Please create an itinerary first')
+    // Allow sharing as long as we have some days to share (even if store.itinerary is empty fallback)
+    const hasDays = days && days.length > 0
+    if (!hasDays) {
+      addBanner('error', 'Please create an itinerary first')
       return
     }
 
+    // If trip is missing (e.g., user landed directly on this page), create a minimal stub
+    const tripToShare =
+      currentTrip ||
+      {
+        destination: 'Your Trip',
+        days: String(days.length),
+        dates: {
+          start: new Date().toISOString().split('T')[0],
+          end: new Date(Date.now() + days.length * 24 * 60 * 60 * 1000)
+            .toISOString()
+            .split('T')[0],
+        },
+        interests: [],
+        travelMode: 'walking',
+        pace: 'balanced',
+        accessibility: false,
+      }
+
     setIsSharing(true)
     try {
-      const response = await fetch('/api/share', {
+      const response = await trackedFetch('/api/share', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          trip: currentTrip,
+          trip: tripToShare,
           locations: selectedLocations,
           itinerary: days,
         }),
@@ -163,9 +197,10 @@ export default function ItineraryOverview() {
       const data = await response.json()
       const fullUrl = `${window.location.origin}${data.shareUrl}`
       setShareUrl(fullUrl)
+      addBanner('success', 'Shareable link created!')
     } catch (error) {
       console.error('Error sharing itinerary:', error)
-      alert('Failed to share itinerary. Please try again.')
+      addBanner('error', 'Failed to share itinerary. Please try again.')
     } finally {
       setIsSharing(false)
     }
@@ -178,9 +213,46 @@ export default function ItineraryOverview() {
       await navigator.clipboard.writeText(shareUrl)
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
+      addBanner('success', 'Link copied to clipboard!')
     } catch (error) {
       console.error('Failed to copy link:', error)
-      alert('Failed to copy link. Please copy it manually.')
+      addBanner('error', 'Failed to copy link. Please copy it manually.')
+    }
+  }
+
+  const handleOpenInGoogleMaps = () => {
+    // Prefer selectedLocations with coordinates; fall back to names from itinerary
+    const baseLocations =
+      selectedLocations && selectedLocations.length > 0
+        ? selectedLocations
+        : Array.from(
+            new Set(
+              days.flatMap((d) => d.locations || [])
+            )
+          ).map((name) => ({ name }))
+
+    if (!baseLocations || baseLocations.length === 0) {
+      addBanner('error', 'No locations available to open in Google Maps yet.')
+      return
+    }
+
+    try {
+      const url = createCircularGoogleMapsRoute(
+        baseLocations.map((loc) => ({
+          name: loc.name,
+          lat: (loc as any).lat,
+          lng: (loc as any).lng,
+          address: (loc as any).address,
+        }))
+      )
+      
+      if (typeof window !== 'undefined') {
+        window.open(url, '_blank')
+        addBanner('success', `Opening ${baseLocations.length} location${baseLocations.length > 1 ? 's' : ''} in Google Maps...`)
+      }
+    } catch (error) {
+      console.error('Failed to open Google Maps:', error)
+      addBanner('error', 'Failed to open Google Maps. Please try again.')
     }
   }
 
@@ -224,11 +296,12 @@ export default function ItineraryOverview() {
               )}
             </div>
             <button
-              onClick={handleDownload}
-              className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200 transition-all flex items-center gap-2"
+              onClick={handleSaveAsPDF}
+              disabled={isGeneratingPDF}
+              className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200 transition-all flex items-center gap-2 disabled:opacity-50"
             >
-              <Download className="w-4 h-4" />
-              Download
+              <FileText className="w-4 h-4" />
+              {isGeneratingPDF ? 'Generating PDF...' : 'Save as PDF'}
             </button>
             <button
               onClick={handleShare}
@@ -239,6 +312,13 @@ export default function ItineraryOverview() {
               {isSharing ? 'Sharing...' : 'Share'}
             </button>
             <button
+              onClick={handleOpenInGoogleMaps}
+              className="px-4 py-2 bg-white text-primary border border-primary rounded-lg font-semibold hover:bg-primary/5 transition-all flex items-center gap-2"
+            >
+              <Navigation className="w-4 h-4" />
+              Open in Google Maps
+            </button>
+            <button
               onClick={() => router.push('/app/map')}
               className="px-6 py-3 bg-primary-600 text-white rounded-lg font-semibold hover:bg-primary-700 transition-all hover:scale-105 flex items-center gap-2"
             >
@@ -247,6 +327,57 @@ export default function ItineraryOverview() {
             </button>
           </div>
         </div>
+
+        {/* Banner Messages */}
+        {banners.length > 0 && (
+          <div className="mb-6 space-y-2">
+            {banners.map((banner) => (
+              <div
+                key={banner.id}
+                className={`animate-fade-in-up rounded-lg p-4 flex items-start justify-between gap-4 ${
+                    banner.type === 'error'
+                      ? 'bg-red-50 border border-red-200'
+                      : banner.type === 'success'
+                      ? 'bg-green-50 border border-green-200'
+                      : 'bg-blue-50 border border-blue-200'
+                  }`}
+                >
+                  <div className="flex items-start gap-3 flex-1">
+                    {banner.type === 'error' ? (
+                      <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                    ) : banner.type === 'success' ? (
+                      <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+                    ) : (
+                      <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                    )}
+                    <p
+                      className={`text-sm font-medium ${
+                        banner.type === 'error'
+                          ? 'text-red-900'
+                          : banner.type === 'success'
+                          ? 'text-green-900'
+                          : 'text-blue-900'
+                      }`}
+                    >
+                      {banner.message}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => removeBanner(banner.id)}
+                    className={`flex-shrink-0 ${
+                      banner.type === 'error'
+                        ? 'text-red-600 hover:text-red-800'
+                        : banner.type === 'success'
+                        ? 'text-green-600 hover:text-green-800'
+                        : 'text-blue-600 hover:text-blue-800'
+                    }`}
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
 
         {shareUrl && (
           <div className="mb-6 bg-primary-50 border border-primary-200 rounded-lg p-4">
@@ -275,24 +406,6 @@ export default function ItineraryOverview() {
           </div>
         )}
 
-        {downloadedItems.size > 0 && (
-          <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4">
-            <div className="flex items-center gap-2 text-green-700">
-              <Download className="w-4 h-4" />
-              <span className="font-semibold">Downloaded for offline use:</span>
-            </div>
-            <div className="flex flex-wrap gap-2 mt-2">
-              {Array.from(downloadedItems).map((item) => (
-                <span
-                  key={item}
-                  className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs capitalize"
-                >
-                  {item}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
 
         <div className="space-y-4 mb-8">
           {days.map((day) => {

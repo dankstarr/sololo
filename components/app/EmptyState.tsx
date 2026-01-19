@@ -1,6 +1,5 @@
 'use client'
 
-import { m } from 'framer-motion'
 import { Inbox, MapPin, Users, Compass } from 'lucide-react'
 
 interface EmptyStateProps {

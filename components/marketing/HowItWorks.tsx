@@ -1,6 +1,5 @@
 'use client'
 
-import { m } from 'framer-motion'
 import { MapPin, CheckCircle, Route } from 'lucide-react'
 import appConfig from '@/config/app.config'
 
@@ -43,23 +42,16 @@ export default function HowItWorks() {
           {steps.map((step, index) => {
             const Icon = step.icon
             return (
-              <m.div
+              <div
                 key={index}
-                className="bg-gradient-to-br from-primary-50 to-white p-6 sm:p-8 rounded-2xl shadow-lg hover:shadow-xl transition-all hover:scale-105 border-2 border-primary-200 relative z-10"
-                initial={{ opacity: 1, y: 0 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: '-50px' }}
-                transition={{
-                  duration: appConfig.animations.scrollReveal / 1000,
-                  delay: index * (appConfig.animations.scrollRevealDelay / 1000),
-                }}
+                className="card-modern tilt-card bg-gradient-to-br from-primary-50 to-white p-6 sm:p-8 rounded-2xl shadow-lg border-2 border-primary-200 relative z-10 scroll-scale"
                 style={{ 
-                  ...{ backgroundColor: '#F0F9F0', borderColor: '#BAE6BA', position: 'relative', zIndex: 10 },
-                  opacity: 1 
-                }}
-                whileHover={{
-                  scale: appConfig.animations.hoverScale,
-                  transition: { duration: appConfig.animations.hoverDuration / 1000 },
+                  animationDelay: `${index * 150}ms`,
+                  animationFillMode: 'both',
+                  backgroundColor: '#F0F9F0',
+                  borderColor: '#BAE6BA',
+                  position: 'relative',
+                  zIndex: 10
                 }}
               >
                 <div className="w-16 h-16 bg-primary-600 rounded-full flex items-center justify-center mb-6 mx-auto">
@@ -71,7 +63,7 @@ export default function HowItWorks() {
                 <p className="text-gray-600 text-center leading-relaxed" style={{ color: '#4B5563' }}>
                   {step.description || 'No description available'}
                 </p>
-              </m.div>
+              </div>
             )
           })}
         </div>

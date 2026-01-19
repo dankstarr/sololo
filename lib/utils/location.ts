@@ -13,9 +13,61 @@ export function openInGoogleMaps(location: { name: string; lat?: number; lng?: n
 }
 
 export function createGoogleMapsList(locations: Array<{ name: string; lat?: number; lng?: number }>) {
-  // In a real app, this would use Google Maps API
-  const listName = `Sololo Trip - ${new Date().toLocaleDateString()}`
-  alert(`Creating Google Maps list: ${listName}\n\nThis would open Google Maps with ${locations.length} locations saved.`)
+  if (typeof window === 'undefined') return null
+  
+  if (locations.length === 0) {
+    return null
+  }
+
+  // Create a Google Maps URL with all locations
+  // Google Maps supports multiple locations in a single URL using the "place" parameter
+  // Format: https://www.google.com/maps/search/?api=1&query=... for single location
+  // For multiple locations, we'll create a directions URL with all locations as waypoints
+  
+  if (locations.length === 1) {
+    const loc = locations[0]
+    if (loc.lat && loc.lng) {
+      return `https://www.google.com/maps?q=${loc.lat},${loc.lng}`
+    }
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(loc.name)}`
+  }
+
+  // For multiple locations, create a route with all locations
+  // Use first location as origin, last as destination, and others as waypoints
+  const origin = locations[0]
+  const destination = locations[locations.length - 1]
+  const waypoints = locations.slice(1, -1)
+
+  let originStr: string
+  if (origin.lat && origin.lng) {
+    originStr = `${origin.lat},${origin.lng}`
+  } else {
+    originStr = encodeURIComponent(origin.name)
+  }
+
+  let destStr: string
+  if (destination.lat && destination.lng) {
+    destStr = `${destination.lat},${destination.lng}`
+  } else {
+    destStr = encodeURIComponent(destination.name)
+  }
+
+  let waypointsStr = ''
+  if (waypoints.length > 0) {
+    waypointsStr = waypoints.map(loc => {
+      if (loc.lat && loc.lng) {
+        return `${loc.lat},${loc.lng}`
+      }
+      return encodeURIComponent(loc.name)
+    }).join('|')
+  }
+
+  // Google Maps Directions URL with waypoints
+  if (waypointsStr) {
+    return `https://www.google.com/maps/dir/?api=1&origin=${originStr}&destination=${destStr}&waypoints=${waypointsStr}&travelmode=walking`
+  } else {
+    return `https://www.google.com/maps/dir/?api=1&origin=${originStr}&destination=${destStr}&travelmode=walking`
+  }
 }
 
 export function shareLocation(location: { name: string; address: string }) {

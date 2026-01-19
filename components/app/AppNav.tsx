@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { MapPin, Home, Map, Users, Compass, Menu, X, Calendar, Shield, Navigation } from 'lucide-react'
+import { MapPin, Home, Map, Users, Compass, Menu, X, Calendar, Shield, Navigation, User } from 'lucide-react'
 import { useState } from 'react'
 
 export default function AppNav() {
@@ -16,6 +16,7 @@ export default function AppNav() {
     { href: '/app/groups', label: 'Groups', icon: Users },
     { href: '/discover', label: 'Discover', icon: Compass },
     { href: '/discover/locations', label: 'Top Locations', icon: Navigation },
+    { href: '/app/profile', label: 'Profile', icon: User },
   ]
 
   // Show admin link if on admin page

@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { m } from 'framer-motion'
 import { MapPin, ArrowRight, X } from 'lucide-react'
 
 export default function Onboarding() {

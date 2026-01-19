@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { m } from 'framer-motion'
 import {
   Play,
   Pause,
@@ -45,19 +44,13 @@ export default function AudioGuide({ onClose }: AudioGuideProps = {}) {
     <div className="fixed inset-0 bg-gradient-to-br from-primary-900 via-primary-800 to-primary-900 z-50 flex items-center justify-center">
       {/* Settings Panel */}
       {showSettings && (
-        <m.div
-          className="absolute inset-0 bg-black/50 flex items-center justify-center p-4 z-10"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
+        <div
+          className="animate-fade-in absolute inset-0 bg-black/50 flex items-center justify-center p-4 z-10"
           onClick={() => setShowSettings(false)}
-          transition={{ duration: 0.2 }}
         >
-          <m.div
-            className="bg-white rounded-2xl p-6 max-w-md w-full"
-            initial={{ scale: 0.95 }}
-            animate={{ scale: 1 }}
+          <div
+            className="animate-scale-in bg-white rounded-2xl p-6 max-w-md w-full"
             onClick={(e) => e.stopPropagation()}
-            transition={{ duration: 0.2 }}
           >
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-xl font-bold text-gray-900">Audio Settings</h3>
@@ -145,8 +138,8 @@ export default function AudioGuide({ onClose }: AudioGuideProps = {}) {
                 </p>
               </div>
             </div>
-          </m.div>
-        </m.div>
+          </div>
+        </div>
       )}
 
       {/* Walk Mode UI - Minimal, Audio-First */}

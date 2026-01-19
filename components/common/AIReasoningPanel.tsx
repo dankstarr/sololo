@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { m, AnimatePresence } from 'framer-motion'
 import { ChevronDown, ChevronRight, Sparkles, CheckCircle, Loader2, AlertCircle } from 'lucide-react'
 
 export interface ReasoningStep {
@@ -115,28 +114,19 @@ export default function AIReasoningPanel({
       </button>
       
       {/* Steps */}
-      <AnimatePresence>
-        {isOpen && (
-          <m.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="overflow-hidden"
-          >
-            <div className="p-4 space-y-2 border-t border-gray-200">
-              {steps.map((step, index) => {
-                const isExpanded = expandedSteps.has(step.id)
-                const isActive = step.status === 'processing' || step.status === 'completed'
-                
-                return (
-                  <m.div
-                    key={step.id}
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.1 }}
-                    className={`border rounded-lg transition-all ${getStatusColor(step.status)}`}
-                  >
+      {isOpen && (
+        <div className="overflow-hidden">
+          <div className="p-4 space-y-2 border-t border-gray-200">
+            {steps.map((step, index) => {
+              const isExpanded = expandedSteps.has(step.id)
+              const isActive = step.status === 'processing' || step.status === 'completed'
+              
+              return (
+                <div
+                  key={step.id}
+                  className={`scroll-fade-in border rounded-lg transition-all ${getStatusColor(step.status)}`}
+                  style={{ animationDelay: `${index * 100}ms` }}
+                >
                     <button
                       onClick={() => toggleStep(step.id)}
                       className="w-full px-4 py-3 flex items-start gap-3 text-left hover:bg-white/50 transition-colors"
@@ -168,30 +158,21 @@ export default function AIReasoningPanel({
                     </button>
                     
                     {/* Step Details */}
-                    <AnimatePresence>
-                      {isExpanded && step.details && (
-                        <m.div
-                          initial={{ height: 0, opacity: 0 }}
-                          animate={{ height: 'auto', opacity: 1 }}
-                          exit={{ height: 0, opacity: 0 }}
-                          transition={{ duration: 0.2 }}
-                          className="overflow-hidden"
-                        >
-                          <div className="px-4 pb-3 pl-11 border-t border-gray-200/50 bg-white/30">
-                            <p className="text-sm text-gray-700 whitespace-pre-wrap pt-3">
-                              {step.details}
-                            </p>
-                          </div>
-                        </m.div>
-                      )}
-                    </AnimatePresence>
-                  </m.div>
+                    {isExpanded && step.details && (
+                      <div className="overflow-hidden animate-fade-in">
+                        <div className="px-4 pb-3 pl-11 border-t border-gray-200/50 bg-white/30">
+                          <p className="text-sm text-gray-700 whitespace-pre-wrap pt-3">
+                            {step.details}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 )
               })}
-            </div>
-          </m.div>
-        )}
-      </AnimatePresence>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

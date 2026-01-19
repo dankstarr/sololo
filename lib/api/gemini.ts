@@ -1,6 +1,7 @@
 // Gemini API Integration
 import { gemini } from '@/config/gemini'
 import { geminiCache } from '@/lib/utils/cache'
+import { incrementHourlyUsage } from '@/lib/utils/api-usage'
 
 interface GeminiMessage {
   role: 'user' | 'model'
@@ -60,15 +61,20 @@ function saveUsageStats() {
   }
 }
 
+function checkGeminiMinuteLimit() {
+  const now = Date.now()
+  if (!usageStats.lastRequestTime || now - usageStats.lastRequestTime > 60000) {
+    usageStats.requestsThisMinute = 0
+    usageStats.lastRequestTime = now
+  }
+}
+
 function checkRateLimit(): { allowed: boolean; reason?: string } {
   const limits = gemini.freeTierLimits
   const now = Date.now()
 
   // Reset minute counter if a minute has passed
-  if (now - usageStats.lastRequestTime > 60000) {
-    usageStats.requestsThisMinute = 0
-    usageStats.lastRequestTime = now
-  }
+  checkGeminiMinuteLimit()
 
   // More conservative limits to avoid 429 errors
   // Use 50% of the limit to be safe
@@ -94,15 +100,23 @@ function checkRateLimit(): { allowed: boolean; reason?: string } {
   return { allowed: true }
 }
 
-function incrementUsage(estimatedTokens: number = 1000) {
+function incrementRequestAttempt() {
+  checkGeminiMinuteLimit()
   usageStats.requestsToday++
   usageStats.requestsThisMinute++
-  usageStats.tokensToday += estimatedTokens
   usageStats.lastRequestTime = Date.now()
+  // Power /admin hourly chart with real request volume
+  incrementHourlyUsage(1)
+  saveUsageStats()
+}
+
+function addTokens(estimatedTokens: number) {
+  usageStats.tokensToday += estimatedTokens
   saveUsageStats()
 }
 
 export function getUsageStats(): UsageStats {
+  checkGeminiMinuteLimit()
   return { ...usageStats }
 }
 
@@ -173,6 +187,9 @@ async function callGeminiAPI(prompt: string, systemInstruction?: string): Promis
         },
       }
 
+      // Record the attempt before hitting the network (errors still typically count against quotas)
+      incrementRequestAttempt()
+
       const response = await fetch(url, {
         method: 'POST',
         headers: {
@@ -201,7 +218,7 @@ async function callGeminiAPI(prompt: string, systemInstruction?: string): Promis
       const text = data.candidates[0].content.parts[0].text
       // Rough estimate: Gemini uses ~4 characters per token, but we'll be conservative
       const estimatedTokens = Math.ceil(text.length / 3)
-      incrementUsage(estimatedTokens)
+      addTokens(estimatedTokens)
 
       // Cache the result (cache for 1 hour)
       geminiCache.set(cacheKey, text, 60 * 60 * 1000)

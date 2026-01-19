@@ -1,12 +1,117 @@
 // Google Maps API Integration
 import { googleMaps } from '@/config/google-maps'
 import { mapsCache } from '@/lib/utils/cache'
+import { incrementHourlyUsage } from '@/lib/utils/api-usage'
 
 interface Location {
   name: string
   lat: number
   lng: number
   category?: string
+}
+
+// Track Google Maps API usage
+interface MapsUsageStats {
+  requestsToday: number
+  requestsThisMinute: number
+  lastRequestTime: number
+  geocodeRequests: number
+  placesRequests: number
+  directionsRequests: number
+  placeDetailsRequests: number
+}
+
+let mapsUsageStats: MapsUsageStats = {
+  requestsToday: 0,
+  requestsThisMinute: 0,
+  lastRequestTime: 0,
+  geocodeRequests: 0,
+  placesRequests: 0,
+  directionsRequests: 0,
+  placeDetailsRequests: 0,
+}
+
+// Load usage stats from localStorage
+if (typeof window !== 'undefined') {
+  const saved = localStorage.getItem('google_maps_usage_stats')
+  if (saved) {
+    try {
+      const parsed = JSON.parse(saved)
+      // Reset if it's a new day
+      const today = new Date().toDateString()
+      const savedDate = parsed.date
+      if (savedDate === today) {
+        mapsUsageStats = { ...parsed.stats, lastRequestTime: 0, requestsThisMinute: 0 }
+      }
+    } catch (e) {
+      // Ignore parse errors
+    }
+  }
+}
+
+function saveMapsUsageStats() {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(
+      'google_maps_usage_stats',
+      JSON.stringify({
+        date: new Date().toDateString(),
+        stats: mapsUsageStats,
+      })
+    )
+  }
+}
+
+function incrementMapsUsage(type: 'geocode' | 'places' | 'directions' | 'placeDetails') {
+  checkMapsMinuteLimit()
+  mapsUsageStats.requestsToday++
+  mapsUsageStats.requestsThisMinute++
+  mapsUsageStats.lastRequestTime = Date.now()
+  // Power /admin hourly chart with real request volume
+  incrementHourlyUsage(1)
+  
+  switch (type) {
+    case 'geocode':
+      mapsUsageStats.geocodeRequests++
+      break
+    case 'places':
+      mapsUsageStats.placesRequests++
+      break
+    case 'directions':
+      mapsUsageStats.directionsRequests++
+      break
+    case 'placeDetails':
+      mapsUsageStats.placeDetailsRequests++
+      break
+  }
+  
+  saveMapsUsageStats()
+}
+
+// Reset minute counter if a minute has passed
+function checkMapsMinuteLimit() {
+  const now = Date.now()
+  if (now - mapsUsageStats.lastRequestTime > 60000) {
+    mapsUsageStats.requestsThisMinute = 0
+    mapsUsageStats.lastRequestTime = now
+  }
+}
+
+export function getMapsUsageStats(): MapsUsageStats {
+  checkMapsMinuteLimit()
+  return { ...mapsUsageStats }
+}
+
+export function resetMapsUsageStats() {
+  mapsUsageStats = {
+    requestsToday: 0,
+    requestsThisMinute: 0,
+    lastRequestTime: 0,
+    geocodeRequests: 0,
+    placesRequests: 0,
+    directionsRequests: 0,
+    placeDetailsRequests: 0,
+  }
+  saveMapsUsageStats()
 }
 
 interface GeocodeResponse {
@@ -37,6 +142,8 @@ interface PlacesResponse {
     photos?: Array<{
       photo_reference: string
     }>
+    formatted_address?: string
+    user_ratings_total?: number
   }>
   status: string
 }
@@ -74,11 +181,10 @@ export async function geocodeAddress(address: string): Promise<{ lat: number; ln
     return cached
   }
 
+  let didCall = false
   try {
-    const response = await fetch(
-      `/api/google-maps/geocode?address=${encodeURIComponent(address)}`
-    )
-
+    didCall = true
+    const response = await fetch(`/api/google-maps/geocode?address=${encodeURIComponent(address)}`)
     const data: GeocodeResponse = await response.json()
 
     if (data.status === 'OK' && data.results.length > 0) {
@@ -99,6 +205,9 @@ export async function geocodeAddress(address: string): Promise<{ lat: number; ln
   } catch (error) {
     console.error('Geocoding error:', error)
     return null
+  } finally {
+    // Track usage on any real attempt (success or failure). Cache hits return early above.
+    if (didCall) incrementMapsUsage('geocode')
   }
 }
 
@@ -118,10 +227,10 @@ export async function searchPlaces(
   const cacheKey = mapsCache.key('places', { query, lat: location.lat, lng: location.lng, radius, type })
   const cached = mapsCache.get<Location[]>(cacheKey)
   if (cached) {
-    console.log('Places search: Cache hit')
     return cached
   }
 
+  let didCall = false
   try {
     let url = `/api/google-maps/places?query=${encodeURIComponent(query)}&lat=${location.lat}&lng=${location.lng}&radius=${radius}`
     
@@ -129,6 +238,7 @@ export async function searchPlaces(
       url += `&type=${type}`
     }
 
+    didCall = true
     const response = await fetch(url)
     const data: PlacesResponse = await response.json()
 
@@ -141,14 +251,13 @@ export async function searchPlaces(
         category: place.types[0],
       }))
       
-      // Cache the result (cache for 1 hour - places can change)
-      mapsCache.set(cacheKey, results, 60 * 60 * 1000)
+      // Cache the result (cache for 6 hours - places don't change frequently, reduces API calls)
+      mapsCache.set(cacheKey, results, 6 * 60 * 60 * 1000)
       
       return results
     }
 
     if (data.status === 'ZERO_RESULTS') {
-      console.log(`No results for query: ${query}`)
       // Cache empty results for shorter time (5 minutes) to avoid repeated failed queries
       mapsCache.set(cacheKey, [], 5 * 60 * 1000)
       return []
@@ -159,6 +268,8 @@ export async function searchPlaces(
   } catch (error) {
     console.error('Places search error:', error)
     return []
+  } finally {
+    if (didCall) incrementMapsUsage('places')
   }
 }
 
@@ -191,6 +302,7 @@ export async function getDirections(
     return cached
   }
 
+  let didCall = false
   try {
     let url = `/api/google-maps/directions?origin=${encodeURIComponent(originStr)}&destination=${encodeURIComponent(destStr)}&mode=${travelMode}`
     
@@ -198,6 +310,7 @@ export async function getDirections(
       url += `&waypoints=${encodeURIComponent(waypointStr)}`
     }
 
+    didCall = true
     const response = await fetch(url)
     const data: DirectionsResponse = await response.json()
 
@@ -226,6 +339,114 @@ export async function getDirections(
   } catch (error) {
     console.error('Directions error:', error)
     return null
+  } finally {
+    if (didCall) incrementMapsUsage('directions')
+  }
+}
+
+export async function findPlaceIdByText(
+  query: string,
+  location: { lat: number; lng: number },
+  radius: number = 20000
+): Promise<string | null> {
+  if (!googleMaps.enabled || !googleMaps.apiKey) {
+    console.warn('Google Maps API not configured')
+    return null
+  }
+
+  const cacheKey = mapsCache.key('placeIdByText', { query, lat: location.lat, lng: location.lng, radius })
+  const cached = mapsCache.get<string | null>(cacheKey)
+  if (cached !== undefined) {
+    return cached
+  }
+
+  let didCall = false
+  try {
+    didCall = true
+    const response = await fetch(
+      `/api/google-maps/places?query=${encodeURIComponent(query)}&lat=${location.lat}&lng=${location.lng}&radius=${radius}`
+    )
+    const data: PlacesResponse = await response.json()
+
+    if (data.status === 'OK' && data.results.length > 0) {
+      const placeId = data.results[0].place_id
+      mapsCache.set(cacheKey, placeId, 24 * 60 * 60 * 1000)
+      return placeId
+    }
+
+    if (data.status === 'ZERO_RESULTS') {
+      mapsCache.set(cacheKey, null, 6 * 60 * 60 * 1000)
+      return null
+    }
+
+    return null
+  } catch (error) {
+    console.error('findPlaceIdByText error:', error)
+    return null
+  } finally {
+    if (didCall) incrementMapsUsage('places')
+  }
+}
+
+// Get autocomplete suggestions for a location query
+export async function getAutocompleteSuggestions(
+  input: string,
+  location?: { lat: number; lng: number }
+): Promise<Array<{ description: string; placeId: string }>> {
+  if (!googleMaps.enabled || !googleMaps.apiKey) {
+    console.warn('Google Maps API not configured')
+    return []
+  }
+
+  if (!input || input.trim().length < 2) {
+    return []
+  }
+
+  // Check cache first
+  const locationStr = location ? `${location.lat},${location.lng}` : 'global'
+  const cacheKey = mapsCache.key('autocomplete', { input: input.trim().toLowerCase(), location: locationStr })
+  const cached = mapsCache.get<Array<{ description: string; placeId: string }>>(cacheKey)
+  if (cached) {
+    return cached
+  }
+
+  let didCall = false
+  try {
+    let url = `/api/google-maps/autocomplete?input=${encodeURIComponent(input)}`
+    
+    if (location) {
+      url += `&location=${location.lat},${location.lng}`
+    }
+
+    didCall = true
+    const response = await fetch(url)
+    const data = await response.json()
+
+    if (data.status === 'OK' && data.predictions) {
+      const results = data.predictions.slice(0, 8).map((prediction: any) => ({
+        description: prediction.description,
+        placeId: prediction.place_id,
+      }))
+      
+      // Cache the result (cache for 1 hour - autocomplete queries change frequently)
+      mapsCache.set(cacheKey, results, 60 * 60 * 1000)
+      
+      return results
+    }
+
+    if (data.status === 'ZERO_RESULTS') {
+      // Cache empty results for shorter time (5 minutes)
+      mapsCache.set(cacheKey, [], 5 * 60 * 1000)
+      return []
+    }
+
+    console.warn(`Autocomplete API returned status: ${data.status}`)
+    return []
+  } catch (error) {
+    console.error('Autocomplete error:', error)
+    return []
+  } finally {
+    if (didCall) incrementMapsUsage('places')
   }
 }
 
@@ -238,13 +459,39 @@ export async function getPlaceDetails(placeId: string): Promise<{
   openingHours?: string[]
   rating?: number
   photos?: string[]
+  reviews?: number
+  priceLevel?: number
+  types?: string[]
+  googleMapsUrl?: string
+  description?: string
 } | null> {
   if (!googleMaps.enabled || !googleMaps.apiKey) {
     console.warn('Google Maps API not configured')
     return null
   }
 
+  const cacheKey = mapsCache.key('placeDetails', { placeId })
+  const cached = mapsCache.get<{
+    name: string
+    address: string
+    phone?: string
+    website?: string
+    openingHours?: string[]
+    rating?: number
+    photos?: string[]
+    reviews?: number
+    priceLevel?: number
+    types?: string[]
+    googleMapsUrl?: string
+    description?: string
+  } | null>(cacheKey)
+  if (cached !== undefined) {
+    return cached
+  }
+
+  let didCall = false
   try {
+    didCall = true
     const response = await fetch(
       `/api/google-maps/place-details?place_id=${placeId}`
     )
@@ -252,23 +499,34 @@ export async function getPlaceDetails(placeId: string): Promise<{
     const data = await response.json()
 
     if (data.status === 'OK' && data.result) {
-      return {
+      const details = {
         name: data.result.name,
         address: data.result.formatted_address,
         phone: data.result.formatted_phone_number,
         website: data.result.website,
         openingHours: data.result.opening_hours?.weekday_text,
         rating: data.result.rating,
+        reviews: data.result.user_ratings_total,
+        priceLevel: data.result.price_level,
+        types: data.result.types,
+        googleMapsUrl: data.result.url,
+        description: data.result.editorial_summary?.overview,
         photos: data.result.photos?.slice(0, 5).map((photo: any) => 
           `https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photo_reference=${photo.photo_reference}&key=${googleMaps.apiKey}`
         ),
       }
+
+      mapsCache.set(cacheKey, details, 24 * 60 * 60 * 1000)
+      return details
     }
 
+    mapsCache.set(cacheKey, null, 6 * 60 * 60 * 1000)
     return null
   } catch (error) {
     console.error('Place details error:', error)
     return null
+  } finally {
+    if (didCall) incrementMapsUsage('placeDetails')
   }
 }
 

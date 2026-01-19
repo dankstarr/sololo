@@ -24,6 +24,7 @@ html,
 body {
   max-width: 100vw;
   overflow-x: hidden;
+  overflow-y: auto; /* Ensure vertical scrolling is enabled */
   scroll-behavior: smooth;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -69,9 +70,24 @@ body {
   }
 }
 
-/* Smooth scroll with inertia */
+/* Smooth scroll with inertia - Enhanced */
 html {
   scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch; /* iOS momentum scrolling */
+}
+
+/* Inertia-based smooth scrolling for better UX */
+@supports (scroll-behavior: smooth) {
+  html {
+    scroll-padding-top: 80px; /* Account for fixed header */
+  }
+}
+
+/* Smooth scroll container */
+.smooth-scroll {
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  /* Removed overscroll-behavior: contain as it can prevent scrolling */
 }
 
 /* Custom scrollbar */
@@ -149,6 +165,304 @@ img {
   @keyframes spin {
     to {
       transform: rotate(360deg);
+    }
+  }
+  
+  @keyframes fade-in-up {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  
+  @keyframes slide-in-from-top {
+    from {
+      transform: translateY(-100%);
+    }
+    to {
+      transform: translateY(0);
+    }
+  }
+  
+  @keyframes slide-in-from-right {
+    from {
+      transform: translateX(100%);
+    }
+    to {
+      transform: translateX(0);
+    }
+  }
+  
+  @keyframes slide-in-from-bottom {
+    from {
+      transform: translateY(100%);
+    }
+    to {
+      transform: translateY(0);
+    }
+  }
+  
+  @keyframes slide-in-from-left {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(0);
+    }
+  }
+  
+  .animate-fade-in-up {
+    animation: fade-in-up 0.3s ease-out;
+  }
+  
+  .animate-fade-in {
+    animation: fade-in 0.2s ease-out;
+  }
+  
+  .animate-slide-in-from-top {
+    animation: slide-in-from-top 0.3s ease-out;
+  }
+  
+  .animate-slide-in-from-right {
+    animation: slide-in-from-right 0.3s ease-out;
+  }
+  
+  .animate-slide-in-from-bottom {
+    animation: slide-in-from-bottom 0.3s ease-out;
+  }
+  
+  .animate-slide-in-from-left {
+    animation: slide-in-from-left 0.3s ease-out;
+  }
+  
+  @keyframes draw-path {
+    from {
+      stroke-dashoffset: 1000;
+    }
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+  
+  @keyframes bounce-slow {
+    0%, 100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-10px);
+    }
+  }
+  
+  .animate-draw-path {
+    stroke-dasharray: 1000;
+    animation: draw-path 3s ease-in-out infinite alternate;
+  }
+  
+  .animate-bounce-slow {
+    animation: bounce-slow 2s ease-in-out infinite;
+  }
+  
+  /* Modern UI Effects */
+  
+  /* Smooth hover effects */
+  .hover-lift {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  .hover-lift:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  }
+  
+  .hover-glow {
+    transition: all 0.3s ease;
+  }
+  
+  .hover-glow:hover {
+    box-shadow: 0 0 20px rgba(45, 90, 39, 0.3);
+  }
+  
+  .hover-scale {
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  .hover-scale:hover {
+    transform: scale(1.05);
+  }
+  
+  /* Gentle tilt effects (3D) */
+  .tilt-effect {
+    transform-style: preserve-3d;
+    transition: transform 0.3s ease;
+  }
+  
+  .tilt-effect:hover {
+    transform: perspective(1000px) rotateX(2deg) rotateY(-2deg) scale(1.02);
+  }
+  
+  .tilt-card {
+    transform-style: preserve-3d;
+    transition: transform 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+  }
+  
+  .tilt-card:hover {
+    transform: perspective(1000px) rotateY(5deg) rotateX(-2deg) translateZ(20px);
+  }
+  
+  /* Scroll-based animations (fail-open)
+     - Elements are VISIBLE by default.
+     - JS adds `will-animate` to opt-in to "start hidden then reveal". */
+  .scroll-fade-in,
+  .scroll-slide-left,
+  .scroll-slide-right,
+  .scroll-scale {
+    opacity: 1;
+    transform: none;
+    transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+  }
+
+  .will-animate.scroll-fade-in {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  .will-animate.scroll-fade-in.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .will-animate.scroll-slide-left {
+    opacity: 0;
+    transform: translateX(-50px);
+  }
+  .will-animate.scroll-slide-left.visible {
+    opacity: 1;
+    transform: translateX(0);
+  }
+
+  .will-animate.scroll-slide-right {
+    opacity: 0;
+    transform: translateX(50px);
+  }
+  .will-animate.scroll-slide-right.visible {
+    opacity: 1;
+    transform: translateX(0);
+  }
+
+  .will-animate.scroll-scale {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  .will-animate.scroll-scale.visible {
+    opacity: 1;
+    transform: scale(1);
+  }
+  
+  /* Animated glitch-style effects */
+  .glitch-text {
+    position: relative;
+    display: inline-block;
+  }
+  
+  .glitch-text::before,
+  .glitch-text::after {
+    content: attr(data-text);
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+  }
+  
+  .glitch-text::before {
+    left: 2px;
+    text-shadow: -2px 0 #ff00c1;
+    clip: rect(44px, 450px, 56px, 0);
+    animation: glitch-anim 5s infinite linear alternate-reverse;
+  }
+  
+  .glitch-text::after {
+    left: -2px;
+    text-shadow: -2px 0 #00fff9, 2px 2px #ff00c1;
+    clip: rect(44px, 450px, 56px, 0);
+    animation: glitch-anim2 1s infinite linear alternate-reverse;
+  }
+  
+  @keyframes glitch-anim {
+    0% { clip: rect(31px, 9999px, 94px, 0); }
+    20% { clip: rect(54px, 9999px, 66px, 0); }
+    40% { clip: rect(28px, 9999px, 84px, 0); }
+    60% { clip: rect(42px, 9999px, 93px, 0); }
+    80% { clip: rect(12px, 9999px, 14px, 0); }
+    100% { clip: rect(88px, 9999px, 9px, 0); }
+  }
+  
+  @keyframes glitch-anim2 {
+    0% { clip: rect(65px, 9999px, 100px, 0); }
+    20% { clip: rect(79px, 9999px, 85px, 0); }
+    40% { clip: rect(66px, 9999px, 51px, 0); }
+    60% { clip: rect(29px, 9999px, 92px, 0); }
+    80% { clip: rect(98px, 9999px, 13px, 0); }
+    100% { clip: rect(1px, 9999px, 83px, 0); }
+  }
+  
+  .glitch-hover {
+    transition: all 0.3s ease;
+  }
+  
+  .glitch-hover:hover {
+    animation: glitch 0.3s ease-in-out;
+  }
+  
+  /* Smooth transitions for all interactive elements */
+  button, a, .card, .btn {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  /* Enhanced card hover effects */
+  .card-modern {
+    transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+    transform-style: preserve-3d;
+  }
+  
+  .card-modern:hover {
+    transform: translateY(-8px) scale(1.02);
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  }
+  
+  /* Glass morphism effect */
+  .glass {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  
+  /* Gradient text animation */
+  .gradient-text {
+    background: linear-gradient(90deg, #2D5A27, #38b838, #2D5A27);
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: gradient-shift 3s linear infinite;
+  }
+  
+  @keyframes gradient-shift {
+    to {
+      background-position: 200% center;
     }
   }
 }

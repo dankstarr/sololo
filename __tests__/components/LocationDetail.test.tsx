@@ -32,13 +32,13 @@ describe('LocationDetail', () => {
     const dialog = container.querySelector('[role="dialog"]')
     expect(dialog).toBeInTheDocument()
     expect(dialog).toHaveAttribute('aria-modal', 'true')
-    expect(dialog).toHaveAttribute('aria-labelledby', 'location-detail-title')
+    expect(dialog).toHaveAttribute('aria-labelledby', 'modal-title')
   })
 
   it('closes when close button is clicked', () => {
     render(<LocationDetail location={mockLocation} onClose={mockOnClose} />)
     
-    const closeButton = screen.getByRole('button', { name: /close location details/i })
+    const closeButton = screen.getByRole('button', { name: /close modal/i })
     fireEvent.click(closeButton)
     
     expect(mockOnClose).toHaveBeenCalled()
@@ -48,6 +48,6 @@ describe('LocationDetail', () => {
     render(<LocationDetail location={mockLocation} onClose={mockOnClose} />)
     
     expect(screen.getByRole('button', { name: /play audio guide/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /close location details/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /close modal/i })).toBeInTheDocument()
   })
 })

@@ -98,4 +98,4 @@ Visit: `/app/nearby` to see the Nearby Discovery page
 
 - **Shared Layout Animation**: Use `layoutId` prop for morphing animations
 - **Spring Transition**: Already implemented in Drawer (stiffness: 150, damping: 20)
-- **Scroll-linked Reveal**: Use `useInView` hook from framer-motion for scroll animations
+- **Scroll-linked Reveal**: Use CSS animations or Intersection Observer API for scroll animations

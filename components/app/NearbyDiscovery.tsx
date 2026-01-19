@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useMemo, useEffect } from 'react'
-import { m, AnimatePresence } from 'framer-motion'
 import { Search, MapPin, Star, Filter, X } from 'lucide-react'
 import { Input, Badge, ScrollArea, Card, Slider, ToggleGroup, ToggleGroupItem, Drawer, DrawerContent } from '@/components/ui'
 import { londonLocations, NearbyLocation } from '@/config/nearby-locations'
@@ -61,39 +60,13 @@ export default function NearbyDiscovery() {
     })
   }, [searchQuery, activeFilter, minReviews])
 
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.05,
-      },
-    },
-  }
-
-  const itemVariants = {
-    hidden: { opacity: 0, y: 20 },
-    visible: {
-      opacity: 1,
-      y: 0,
-      transition: {
-        type: 'spring',
-        stiffness: 100,
-        damping: 15,
-      },
-    },
-  }
-
   const LocationCard = ({ location, index }: { location: NearbyLocation; index: number }) => {
     const isHighRated = location.rating > 4.7
 
     return (
-      <m.div
-        variants={itemVariants}
-        initial="hidden"
-        animate="visible"
-        whileHover={{ scale: 1.02, transition: { type: 'spring', stiffness: 300, damping: 20 } }}
-        className="cursor-pointer"
+      <div
+        className="cursor-pointer hover:scale-[1.02] transition-transform duration-200 scroll-fade-in"
+        style={{ animationDelay: `${index * 50}ms` }}
         onClick={() => setSelectedLocation(location.id)}
       >
         <Card className="overflow-hidden hover:shadow-xl transition-all">
@@ -128,13 +101,9 @@ export default function NearbyDiscovery() {
                   <span className="font-semibold text-foreground">{location.rating}</span>
                 </div>
                 {isHighRated && (
-                  <m.span
-                    className="text-xs text-muted-foreground"
-                    animate={{ opacity: [1, 0.7, 1] }}
-                    transition={{ duration: 2, repeat: Infinity }}
-                  >
+                  <span className="text-xs text-muted-foreground animate-pulse">
                     ⭐ Top Rated
-                  </m.span>
+                  </span>
                 )}
                 <span className="text-xs text-muted-foreground">
                   ({location.reviewCount.toLocaleString()} reviews)
@@ -149,7 +118,7 @@ export default function NearbyDiscovery() {
             </div>
           </div>
         </Card>
-      </m.div>
+      </div>
     )
   }
 
@@ -218,16 +187,11 @@ export default function NearbyDiscovery() {
 
         {/* Scrollable List */}
         <ScrollArea className="flex-1 p-4">
-          <m.div
-            variants={containerVariants}
-            initial="hidden"
-            animate="visible"
-            className="space-y-3"
-          >
+          <div className="space-y-3">
             {filteredLocations.map((location, index) => (
               <LocationCard key={location.id} location={location} index={index} />
             ))}
-          </m.div>
+          </div>
         </ScrollArea>
       </div>
 
@@ -327,16 +291,11 @@ export default function NearbyDiscovery() {
 
             {/* Location List */}
             <ScrollArea className="max-h-[60vh] -mx-6 px-6">
-              <m.div
-                variants={containerVariants}
-                initial="hidden"
-                animate="visible"
-                className="space-y-3 pb-4"
-              >
+              <div className="space-y-3 pb-4">
                 {filteredLocations.map((location, index) => (
                   <LocationCard key={location.id} location={location} index={index} />
                 ))}
-              </m.div>
+              </div>
             </ScrollArea>
           </div>
         </DrawerContent>

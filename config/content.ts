@@ -46,8 +46,8 @@ export const features = [
   },
   {
     icon: 'Download',
-    title: 'Offline Mode',
-    description: 'Download routes, maps, and audio guides for offline use when traveling.',
+    title: 'Save as PDF',
+    description: 'Save your entire itinerary, routes, and maps as PDF for offline access and easy sharing.',
   },
 ]
 

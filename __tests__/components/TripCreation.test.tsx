@@ -17,6 +17,7 @@ describe('TripCreation', () => {
   const mockPush = jest.fn()
   const mockIncrementItineraryCount = jest.fn()
   const mockCheckLimit = jest.fn(() => true)
+  const mockSetCurrentTrip = jest.fn()
 
   beforeEach(() => {
     jest.clearAllMocks()
@@ -28,6 +29,7 @@ describe('TripCreation', () => {
       isPro: false,
       checkLimit: mockCheckLimit,
       incrementItineraryCount: mockIncrementItineraryCount,
+      setCurrentTrip: mockSetCurrentTrip,
     })
   })
 
@@ -83,6 +85,7 @@ describe('TripCreation', () => {
       isPro: false,
       checkLimit: mockCheckLimit,
       incrementItineraryCount: mockIncrementItineraryCount,
+      setCurrentTrip: mockSetCurrentTrip,
     })
 
     render(<TripCreation />)

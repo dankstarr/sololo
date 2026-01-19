@@ -10,6 +10,14 @@ NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=your_google_maps_api_key_here
 
 # Gemini AI Configuration
 NEXT_PUBLIC_GEMINI_API_KEY=your_gemini_api_key_here
+
+# Supabase (Persistence)
+SUPABASE_URL=your_supabase_project_url_here
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key_here
+
+# Google Cloud Platform (for API usage monitoring - optional)
+GOOGLE_CLOUD_PROJECT_ID=your-gcp-project-id
+GOOGLE_APPLICATION_CREDENTIALS_JSON={"type":"service_account","project_id":"...","private_key_id":"...","private_key":"-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n","client_email":"...","client_id":"...","auth_uri":"https://accounts.google.com/o/oauth2/auth","token_uri":"https://oauth2.googleapis.com/token","auth_provider_x509_cert_url":"https://www.googleapis.com/oauth2/v1/certs","client_x509_cert_url":"..."}
 ```
 
 ## Steps to Create .env.local
@@ -32,6 +40,18 @@ NEXT_PUBLIC_GEMINI_API_KEY=your_gemini_api_key_here
 - **Env var**: `NEXT_PUBLIC_GEMINI_API_KEY`
 - **Used in**: `config/gemini.ts`
 - **Accessed via**: `process.env.NEXT_PUBLIC_GEMINI_API_KEY`
+
+### Supabase (Persistence)
+- **Env vars**: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
+- **Used in**: `lib/supabase/*`, server routes under `app/api/*`
+- **Accessed via**: `process.env.SUPABASE_URL`, `process.env.SUPABASE_SERVICE_ROLE_KEY`
+- **Security**: `SUPABASE_SERVICE_ROLE_KEY` must remain server-only (never `NEXT_PUBLIC_*`)
+
+### Google Cloud Platform (API Usage Monitoring - Optional)
+- **Env vars**: `GOOGLE_CLOUD_PROJECT_ID`, `GOOGLE_APPLICATION_CREDENTIALS_JSON`
+- **Used in**: `app/api/admin/gcp-usage/route.ts` (admin dashboard)
+- **Purpose**: Fetch real API usage data from Google Cloud Monitoring
+- **Security**: `GOOGLE_APPLICATION_CREDENTIALS_JSON` must remain server-only (never `NEXT_PUBLIC_*`)
 
 ## Verification
 

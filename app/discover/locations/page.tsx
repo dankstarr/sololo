@@ -1,28 +1,43 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
-import { m } from 'framer-motion'
-import { Search, MapPin, Star, Filter, ArrowLeft, Map as MapIcon, ExternalLink, Navigation, X, Check, Route, Calendar } from 'lucide-react'
-import { 
-  Input, 
-  Badge, 
+import { useEffect, useMemo, useState, useCallback } from 'react'
+import {
+  Search,
+  MapPin,
+  Star,
+  Filter,
+  ArrowLeft,
+  Map as MapIcon,
+  ExternalLink,
+  Navigation,
+  X,
+  Check,
+  Route,
+  Calendar,
+  AlertCircle,
+  CheckCircle2,
+  Info,
+  Phone,
+  Clock,
+  DollarSign,
+  RefreshCw,
+} from 'lucide-react'
+import {
+  Input,
+  Badge,
   Card,
   Button,
 } from '@/components/ui'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { discoverLocations, DiscoverLocation } from '@/config/discover-locations'
-import { getImageUrl } from '@/lib/utils'
 import { openInGoogleMaps, createCircularGoogleMapsRoute } from '@/lib/utils/location'
-import { geocodeAddress } from '@/lib/api/google-maps'
-import Image from 'next/image'
+import { findPlaceIdByText, geocodeAddress, getPlaceDetails, searchPlaces, getAutocompleteSuggestions } from '@/lib/api/google-maps'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-import Header from '@/components/marketing/Header'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Footer from '@/components/marketing/Footer'
 import { SimpleMap } from '@/components/maps'
 import { useAppStore } from '@/store/useAppStore'
 import { Location } from '@/types'
-import { useDebounce } from '@/hooks'
 
 type SortType = 'best' | 'top-rated' | 'most-reviewed' | 'hidden-gems' | 'worst-rated' | 'recently-discovered'
 type FilterType = 'all' | 'current-location' | 'best' | 'top-rated' | 'hidden-gems'
@@ -34,25 +49,63 @@ interface LocationWithCoords extends DiscoverLocation {
   selected?: boolean
 }
 
+interface BannerMessage {
+  id: string
+  type: 'error' | 'success' | 'info'
+  message: string
+}
+
+type GooglePlaceEnrichment = NonNullable<Awaited<ReturnType<typeof getPlaceDetails>>>
+
 export default function TopLocationsPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { setSelectedLocations, setItinerary, setCurrentTrip } = useAppStore()
   const [searchQuery, setSearchQuery] = useState('')
-  const debouncedSearchQuery = useDebounce(searchQuery, 500) // 500ms debounce
-  const [activeFilter, setActiveFilter] = useState<FilterType>('top-rated')
+  const [committedSearchQuery, setCommittedSearchQuery] = useState<string>('')
+  const effectiveSearchQuery = committedSearchQuery
+  // Start with "All" so you always see a list on first load
+  const [activeFilter, setActiveFilter] = useState<FilterType>('all')
   const [sortBy, setSortBy] = useState<SortType>('top-rated')
   const [searchRadius, setSearchRadius] = useState(5) // km
   const [minReviews, setMinReviews] = useState(0)
   const [maxReviews, setMaxReviews] = useState(100000)
   const [selectedCategories, setSelectedCategories] = useState<string[]>([])
-  const [isMobile, setIsMobile] = useState(false)
-  const [showMap, setShowMap] = useState(false)
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null)
   const [locationName, setLocationName] = useState('My Current Location')
   const [selectedLocationIds, setSelectedLocationIds] = useState<Set<string>>(new Set())
   const [locationCoords, setLocationCoords] = useState<Map<string, { lat: number; lng: number }>>(new Map())
+  const [banners, setBanners] = useState<BannerMessage[]>([])
+  const [googleEnrichmentByLocationId, setGoogleEnrichmentByLocationId] = useState<Record<string, GooglePlaceEnrichment | null>>({})
+  const [googleEnrichmentLoading, setGoogleEnrichmentLoading] = useState<Set<string>>(new Set())
+  const [aroundMeLocations, setAroundMeLocations] = useState<DiscoverLocation[]>([])
+  const [loadingAroundMe, setLoadingAroundMe] = useState(false)
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const [isSearchingLocation, setIsSearchingLocation] = useState(false)
+  const [autocompleteSuggestions, setAutocompleteSuggestions] = useState<Array<{ description: string; placeId: string }>>([])
+  const [loadingAutocomplete, setLoadingAutocomplete] = useState(false)
+  const [initializedFromUrl, setInitializedFromUrl] = useState(false)
+  const [resultsSource, setResultsSource] = useState<'static' | 'cached' | 'live'>('static')
 
-  // Get user's current location
+  const LONDON_CENTER = useMemo(() => ({ lat: 51.5074, lng: -0.1278 }), [])
+  const AUTO_ENRICH_COUNT = 3 // Reduced from 10 to minimize API calls - only auto-enrich top 3 locations
+  const RADIUS_OPTIONS_KM = [1, 2, 5, 10, 25, 50]
+
+  const addBanner = (type: 'error' | 'success' | 'info', message: string) => {
+    const id = Date.now().toString()
+    setBanners((prev) => [...prev, { id, type, message }])
+
+    // Auto dismiss after 5s
+    setTimeout(() => {
+      setBanners((prev) => prev.filter((b) => b.id !== id))
+    }, 5000)
+  }
+
+  const removeBanner = (id: string) => {
+    setBanners((prev) => prev.filter((b) => b.id !== id))
+  }
+
+  // Get user's current location whenever "Around me" is active
   useEffect(() => {
     if (activeFilter === 'current-location' && navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
@@ -64,37 +117,328 @@ export default function TopLocationsPage() {
         },
         (error) => {
           console.error('Geolocation error:', error)
-          setLocationName('London, UK') // Fallback
+          // Fallback: keep the UI usable even if geolocation is blocked
+          setLocationName('London, UK')
+          setUserLocation(LONDON_CENTER)
+          addBanner(
+            'info',
+            'Location access blocked — showing results with a London fallback. Enable location to use “Around me”.'
+          )
         }
       )
     }
-  }, [activeFilter])
+  }, [activeFilter, LONDON_CENTER])
+
+  // Helper to set location, URL params, and defaults (2km, around me)
+  const setLocationFromCoords = (
+    coords: { lat: number; lng: number },
+    address: string,
+    radiusKm: number = 2,
+    message?: string
+  ) => {
+    setLocationName(address)
+    setUserLocation({ lat: coords.lat, lng: coords.lng })
+    setActiveFilter('current-location')
+    setSearchRadius(radiusKm)
+    setCommittedSearchQuery('')
+    setShowSuggestions(false)
+
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search)
+      params.set('lat', coords.lat.toString())
+      params.set('lng', coords.lng.toString())
+      params.set('radius', radiusKm.toString())
+      params.set('q', address)
+      router.replace(`?${params.toString()}`, { scroll: false })
+    }
+
+    if (message) {
+      addBanner('success', message)
+    }
+  }
+
+  // Initialize from URL params if present
+  useEffect(() => {
+    const lat = searchParams.get('lat')
+    const lng = searchParams.get('lng')
+    const radius = searchParams.get('radius')
+    const q = searchParams.get('q')
+
+    if (lat && lng) {
+      const latNum = parseFloat(lat)
+      const lngNum = parseFloat(lng)
+      const radiusNum = radius ? parseFloat(radius) : 2
+
+      if (!isNaN(latNum) && !isNaN(lngNum)) {
+        setInitializedFromUrl(true)
+        // Treat q as the label for the center point, NOT as a filter query.
+        // Otherwise we'd filter results down to just the typed city name.
+        setLocationName(q || 'Custom location')
+        setSearchQuery(q || '')
+        setUserLocation({ lat: latNum, lng: lngNum })
+        setActiveFilter('current-location')
+        setSearchRadius(!isNaN(radiusNum) && radiusNum > 0 ? radiusNum : 2)
+        setCommittedSearchQuery('')
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
+
+  // On first page load, immediately try to use the current location unless URL provided one
+  useEffect(() => {
+    if (!initializedFromUrl) {
+      enableAroundMe()
+    }
+    // We intentionally only want this to run once on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initializedFromUrl])
+
+  const enableAroundMe = () => {
+    setActiveFilter('current-location')
+
+    if (!navigator.geolocation) {
+      addBanner('error', 'Your browser does not support geolocation.')
+      return
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setUserLocation({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        })
+      },
+      (error) => {
+        console.error('Geolocation error:', error)
+        setLocationName('London, UK')
+        setUserLocation(LONDON_CENTER)
+        addBanner('info', 'Location access blocked — showing results with a London fallback. Enable location to use “Around me”.')
+      }
+    )
+  }
+
+  const handleSearchLocationByText = async () => {
+    const value = searchQuery.trim()
+    if (!value) {
+      addBanner('info', 'Type a location name first.')
+      return
+    }
+
+    setIsSearchingLocation(true)
+    try {
+      const result = await geocodeAddress(value)
+      if (!result) {
+        addBanner('error', `Could not find "${value}". Try a more specific name.`)
+        return
+      }
+
+      setLocationFromCoords(
+        { lat: result.lat, lng: result.lng },
+        result.address,
+        2,
+        `Showing locations within 2km of ${result.address}.`
+      )
+    } finally {
+      setIsSearchingLocation(false)
+    }
+  }
+
+  // Compute distance in km between two coordinates (Haversine formula)
+  const getDistanceKm = (
+    a: { lat: number; lng: number },
+    b: { lat: number; lng: number }
+  ): number => {
+    const R = 6371 // Earth's radius in km
+    const dLat = ((b.lat - a.lat) * Math.PI) / 180
+    const dLng = ((b.lng - a.lng) * Math.PI) / 180
+    const lat1 = (a.lat * Math.PI) / 180
+    const lat2 = (b.lat * Math.PI) / 180
+
+    const sinDLat = Math.sin(dLat / 2)
+    const sinDLng = Math.sin(dLng / 2)
+
+    const c =
+      sinDLat * sinDLat +
+      Math.cos(lat1) * Math.cos(lat2) * sinDLng * sinDLng
+
+    const d = 2 * Math.atan2(Math.sqrt(c), Math.sqrt(1 - c))
+    return R * d
+  }
+
+  const searchAroundMe = useCallback(
+    async (options?: { bypassCache?: boolean }) => {
+      if (activeFilter !== 'current-location' || !userLocation) {
+        setAroundMeLocations([])
+        return
+      }
+
+      setLoadingAroundMe(true)
+      try {
+        const roundedLat = Math.round(userLocation.lat * 100) / 100
+        const roundedLng = Math.round(userLocation.lng * 100) / 100
+        const roundedRadius = Math.round(searchRadius * 10) / 10
+
+        // Try cached/database data first (unless bypassed)
+        if (!options?.bypassCache) {
+          try {
+            const res = await fetch(
+              `/api/top-locations?mode=around&lat=${roundedLat}&lng=${roundedLng}&radius=${roundedRadius}`
+            )
+            if (res.ok) {
+              const data = await res.json()
+              if (Array.isArray(data.locations) && data.locations.length > 0) {
+                const cached = data.locations as DiscoverLocation[]
+                setAroundMeLocations(cached)
+
+                // Restore coordinates if present in cached rows
+                const coordsMap = new Map<string, { lat: number; lng: number }>()
+                cached.forEach((loc: any) => {
+                  if (loc.lat && loc.lng) {
+                    coordsMap.set(loc.id, { lat: loc.lat, lng: loc.lng })
+                  }
+                })
+                if (coordsMap.size > 0) {
+                  setLocationCoords((prev) => {
+                    const next = new Map(prev)
+                    coordsMap.forEach((coords, id) => {
+                      next.set(id, coords)
+                    })
+                    return next
+                  })
+                }
+
+                setResultsSource('cached')
+                return
+              }
+            }
+          } catch (e) {
+            console.warn('Failed to load cached top locations:', e)
+          }
+        }
+
+        setResultsSource('live')
+
+        // Reduced to 2 most important queries to minimize API calls
+        // These broad queries return diverse results (attractions, restaurants, landmarks, etc.)
+        const searchQueries = [
+          'tourist attractions', // Covers attractions, landmarks, points of interest
+          'restaurants', // Covers dining and food
+        ]
+
+        const foundPlaces: any[] = []
+        const newCoords = new Map<string, { lat: number; lng: number }>()
+
+        // Search with reduced queries to minimize API calls while still getting diverse results
+        for (const query of searchQueries) {
+          if (foundPlaces.length >= 20) break // Limit to 20 locations as default
+
+          try {
+            // Google Places API max radius is 50,000 meters (50 km)
+            // For larger radii, we search with max radius and filter by actual distance
+            const apiRadiusMeters = Math.min(searchRadius * 1000, 50000)
+
+            const places = await searchPlaces(query, userLocation, apiRadiusMeters)
+
+            places.forEach((place) => {
+              if (foundPlaces.length >= 20) return // Limit to 20 locations as default
+
+              // Check for duplicates by name
+              const isDuplicate = foundPlaces.some(
+                (loc) => loc.name.toLowerCase() === place.name.toLowerCase()
+              )
+
+              if (!isDuplicate) {
+                // Calculate distance from user
+                const distanceKm = getDistanceKm(userLocation, { lat: place.lat, lng: place.lng })
+
+                // Filter by actual selected radius (works for all values including > 50km)
+                if (distanceKm <= searchRadius) {
+                  const locationId = String(foundPlaces.length + 1)
+
+                  const loc: any = {
+                    id: locationId,
+                    name: place.name,
+                    category: place.category || 'Attraction',
+                    description: `Popular ${place.category || 'attraction'} near you`,
+                    rating: 4.5, // Default rating (will be enriched later if needed)
+                    reviews: 100, // Default reviews (will be enriched later if needed)
+                    distance: `${distanceKm.toFixed(1)} km`,
+                    lat: place.lat,
+                    lng: place.lng,
+                  }
+
+                  foundPlaces.push(loc)
+
+                  // Store coordinates for map
+                  newCoords.set(locationId, { lat: place.lat, lng: place.lng })
+                }
+              }
+            })
+          } catch (error) {
+            console.error(`Error searching for ${query}:`, error)
+          }
+        }
+
+        // Batch update coordinates
+        setLocationCoords((prev) => {
+          const next = new Map(prev)
+          newCoords.forEach((coords, id) => {
+            next.set(id, coords)
+          })
+          return next
+        })
+
+        setAroundMeLocations(foundPlaces)
+
+        // Persist results to Supabase cache (best-effort)
+        try {
+          await fetch('/api/top-locations', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              mode: 'around',
+              lat: roundedLat,
+              lng: roundedLng,
+              radius: roundedRadius,
+              locations: foundPlaces,
+            }),
+          })
+        } catch (e) {
+          console.warn('Failed to write top locations cache:', e)
+        }
+      } catch (error) {
+        console.error('Error searching around me:', error)
+        addBanner('error', 'Failed to find places near you. Please try again.')
+      } finally {
+        setLoadingAroundMe(false)
+      }
+    },
+    [activeFilter, userLocation, searchRadius]
+  )
+
+  // Search for places around user's location when "Around me" is active
+  useEffect(() => {
+    // Debounce to prevent rapid API calls when radius changes quickly
+    const timeoutId = setTimeout(() => {
+      void searchAroundMe()
+    }, 500) // Wait 500ms after last change before searching
+
+    return () => clearTimeout(timeoutId)
+  }, [searchAroundMe])
 
   // Get all unique categories
   const allCategories = useMemo(() => {
     const categories = new Set<string>()
-    discoverLocations.forEach(loc => {
+    const locationsToUse = activeFilter === 'current-location' && aroundMeLocations.length > 0
+      ? aroundMeLocations
+      : discoverLocations
+    locationsToUse.forEach(loc => {
       if (loc.category) categories.add(loc.category)
     })
     return Array.from(categories).sort()
-  }, [])
+  }, [activeFilter, aroundMeLocations])
 
-  // Debug: Log locations data
-  useEffect(() => {
-    console.log('Discover locations:', discoverLocations?.length || 0, 'locations loaded')
-    if (discoverLocations && discoverLocations.length > 0) {
-      console.log('Sample location:', discoverLocations[0])
-      console.log('Locations with rating >= 4.6:', discoverLocations.filter(loc => loc.rating >= 4.6).length)
-    }
-  }, [])
-
-  // Detect mobile
-  useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 768)
-    checkMobile()
-    window.addEventListener('resize', checkMobile)
-    return () => window.removeEventListener('resize', checkMobile)
-  }, [])
+  // (removed debug-only logs and mobile detection)
 
   // Format reviews
   const formatReviews = (count: number): string => {
@@ -104,7 +448,7 @@ export default function TopLocationsPage() {
     }).format(count)
   }
 
-  // Parse distance string to number (km)
+  // Parse distance string to number (km) from static seed data
   const parseDistance = (distanceStr: string): number => {
     const match = distanceStr.match(/(\d+\.?\d*)\s*(km|m)/i)
     if (!match) return 0
@@ -112,25 +456,66 @@ export default function TopLocationsPage() {
     return match[2].toLowerCase() === 'km' ? value : value / 1000
   }
 
+  // Fetch autocomplete suggestions from Google Places API (worldwide)
+  useEffect(() => {
+    const fetchAutocomplete = async () => {
+      const query = searchQuery.trim()
+      
+      // Don't search if query is too short or empty
+      if (!query || query.length < 2) {
+        setAutocompleteSuggestions([])
+        return
+      }
+
+      // Don't search if user just pressed Enter (committed search)
+      if (committedSearchQuery && query === committedSearchQuery) {
+        setAutocompleteSuggestions([])
+        return
+      }
+
+      setLoadingAutocomplete(true)
+      try {
+        // Use user location for biasing if available, otherwise global search
+        const location = activeFilter === 'current-location' && userLocation ? userLocation : undefined
+        const suggestions = await getAutocompleteSuggestions(query, location)
+        setAutocompleteSuggestions(suggestions)
+      } catch (error) {
+        console.error('Error fetching autocomplete:', error)
+        setAutocompleteSuggestions([])
+      } finally {
+        setLoadingAutocomplete(false)
+      }
+    }
+
+    // Debounce autocomplete requests
+    const timeoutId = setTimeout(() => {
+      void fetchAutocomplete()
+    }, 300) // Wait 300ms after user stops typing
+
+    return () => clearTimeout(timeoutId)
+  }, [searchQuery, userLocation, activeFilter, committedSearchQuery])
+
   // Filter and sort locations
   const filteredLocations = useMemo(() => {
-    // Ensure discoverLocations is an array
-    if (!discoverLocations || !Array.isArray(discoverLocations) || discoverLocations.length === 0) {
-      console.warn('discoverLocations is empty or not an array', discoverLocations)
+    // Use "around me" locations when that filter is active, otherwise use static discoverLocations
+    const locationsToFilter = activeFilter === 'current-location' && aroundMeLocations.length > 0
+      ? aroundMeLocations
+      : discoverLocations
+
+    // Ensure locationsToFilter is an array
+    if (!locationsToFilter || !Array.isArray(locationsToFilter) || locationsToFilter.length === 0) {
       return []
     }
 
-    console.log('Filtering locations:', discoverLocations.length, 'total locations')
+    let filtered = [...locationsToFilter]
 
-    let filtered = [...discoverLocations]
-
-    // Apply search filter (using debounced query to avoid spammy API calls)
-    if (debouncedSearchQuery) {
+    // Apply search filter (debounced while typing; immediate when Enter is pressed)
+    if (effectiveSearchQuery) {
       filtered = filtered.filter(
         (loc) =>
-          loc.name.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
-          loc.category.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
-          loc.description.toLowerCase().includes(debouncedSearchQuery.toLowerCase())
+          loc.name.toLowerCase().includes(effectiveSearchQuery.toLowerCase()) ||
+          loc.category.toLowerCase().includes(effectiveSearchQuery.toLowerCase()) ||
+          loc.description.toLowerCase().includes(effectiveSearchQuery.toLowerCase())
       )
     }
 
@@ -140,15 +525,27 @@ export default function TopLocationsPage() {
     }
 
     // Apply review count filter
-    filtered = filtered.filter(loc => loc.reviews >= minReviews && loc.reviews <= maxReviews)
+    filtered = filtered.filter(
+      (loc) => loc.reviews >= minReviews && loc.reviews <= maxReviews
+    )
 
-    // Apply distance filter (if using current location)
-    if (activeFilter === 'current-location' && userLocation && searchRadius > 0) {
-      // For demo, we'll filter by distance string parsing
-      // In production, calculate actual distance from user location
-      filtered = filtered.filter(loc => {
-        const distance = parseDistance(loc.distance)
-        return distance <= searchRadius
+    // Apply distance filter (for "Around me")
+    if (activeFilter === 'current-location' && searchRadius > 0 && userLocation) {
+      filtered = filtered.filter((loc) => {
+        // For "around me" locations, check actual distance from userLocation
+        if (aroundMeLocations.length > 0) {
+          const coords = locationCoords.get(loc.id)
+          if (coords) {
+            const distanceKm = getDistanceKm(userLocation, coords)
+            return distanceKm <= searchRadius
+          }
+          // Fallback: parse distance string if coordinates not available
+          const staticDistanceKm = parseDistance(loc.distance)
+          return staticDistanceKm <= searchRadius
+        }
+        // For static locations, use distance string
+        const staticDistanceKm = parseDistance(loc.distance)
+        return staticDistanceKm <= searchRadius
       })
     }
 
@@ -191,9 +588,8 @@ export default function TopLocationsPage() {
         break
     }
 
-    console.log('Filtered locations:', sorted.length, 'locations found')
     return sorted
-  }, [debouncedSearchQuery, activeFilter, sortBy, searchRadius, minReviews, maxReviews, selectedCategories, userLocation])
+  }, [effectiveSearchQuery, activeFilter, sortBy, searchRadius, minReviews, maxReviews, selectedCategories, userLocation, aroundMeLocations, locationCoords])
 
   // Toggle location selection
   const toggleLocationSelection = (locationId: string) => {
@@ -223,11 +619,19 @@ export default function TopLocationsPage() {
       })
   }, [filteredLocations, selectedLocationIds, locationCoords])
 
-  // Geocode selected locations when they're selected
+  // All visible locations (filtered) as lightweight location objects for routes/share
+  const allVisibleLocations = useMemo(() => {
+    return filteredLocations.map((loc) => ({
+      name: loc.name,
+      address: `${loc.name}, London, UK`,
+    }))
+  }, [filteredLocations])
+
+  // Geocode selected locations when they're selected (for routes / itinerary only)
   useEffect(() => {
     const geocodeLocations = async () => {
       const toGeocode = filteredLocations.filter(
-        loc => selectedLocationIds.has(loc.id) && !locationCoords.has(loc.id)
+        (loc) => selectedLocationIds.has(loc.id) && !locationCoords.has(loc.id)
       )
 
       if (toGeocode.length === 0) return
@@ -236,7 +640,7 @@ export default function TopLocationsPage() {
         try {
           const coords = await geocodeAddress(`${loc.name}, London, UK`)
           if (coords) {
-            setLocationCoords(prev => {
+            setLocationCoords((prev) => {
               const newMap = new Map(prev)
               newMap.set(loc.id, { lat: coords.lat, lng: coords.lng })
               return newMap
@@ -248,13 +652,55 @@ export default function TopLocationsPage() {
       }
     }
 
-    geocodeLocations()
+    void geocodeLocations()
   }, [selectedLocationIds, filteredLocations, locationCoords])
+
+  // Geocode all visible locations for accurate map markers (one-time per location, cached)
+  useEffect(() => {
+    const geocodeVisible = async () => {
+      // Geocode all visible locations (not just top 25) for accurate positioning
+      const toGeocode = filteredLocations.filter((loc) => !locationCoords.has(loc.id))
+
+      if (toGeocode.length === 0) return
+
+      // Process in batches to avoid overwhelming the API
+      const BATCH_SIZE = 10
+      for (let i = 0; i < toGeocode.length; i += BATCH_SIZE) {
+        const batch = toGeocode.slice(i, i + BATCH_SIZE)
+        await Promise.all(
+          batch.map(async (loc) => {
+            try {
+              const coords = await geocodeAddress(`${loc.name}, London, UK`)
+              if (coords && typeof coords.lat === 'number' && typeof coords.lng === 'number' && 
+                  !isNaN(coords.lat) && !isNaN(coords.lng)) {
+                setLocationCoords((prev) => {
+                  const next = new Map(prev)
+                  // Only set if still missing to avoid overwriting any newer values
+                  if (!next.has(loc.id)) {
+                    next.set(loc.id, { lat: coords.lat, lng: coords.lng })
+                  }
+                  return next
+                })
+              }
+            } catch (error) {
+              console.error(`Error geocoding (map preview) ${loc.name}:`, error)
+            }
+          })
+        )
+        // Small delay between batches to avoid rate limiting
+        if (i + BATCH_SIZE < toGeocode.length) {
+          await new Promise(resolve => setTimeout(resolve, 200))
+        }
+      }
+    }
+
+    void geocodeVisible()
+  }, [filteredLocations, locationCoords])
 
   // Create circular Google Maps route
   const handleCreateCircularRoute = () => {
     if (selectedLocations.length === 0) {
-      alert('Please select at least one location')
+      addBanner('error', 'Please select at least one location')
       return
     }
 
@@ -262,10 +708,90 @@ export default function TopLocationsPage() {
     window.open(routeUrl, '_blank')
   }
 
+  // Create circular route for all currently visible locations
+  const handleCreateRouteForAll = () => {
+    if (allVisibleLocations.length === 0) {
+      addBanner('error', 'No locations to create a route from the current filters.')
+      return
+    }
+
+    const routeUrl = createCircularGoogleMapsRoute(allVisibleLocations)
+    window.open(routeUrl, '_blank')
+    addBanner(
+      'success',
+      `Opening a Google Maps route for ${allVisibleLocations.length} location${
+        allVisibleLocations.length !== 1 ? 's' : ''
+      }...`
+    )
+  }
+
+  // Share a Google Maps link for all currently visible locations (copy to clipboard)
+  const handleShareAll = async () => {
+    if (allVisibleLocations.length === 0) {
+      addBanner('error', 'No locations to share from the current filters.')
+      return
+    }
+
+    try {
+      const routeUrl = createCircularGoogleMapsRoute(allVisibleLocations)
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(routeUrl)
+        addBanner(
+          'success',
+          `Shareable Google Maps link copied for ${allVisibleLocations.length} location${
+            allVisibleLocations.length !== 1 ? 's' : ''
+          }.`
+        )
+      } else {
+        // Fallback: open in new tab and show info banner
+        window.open(routeUrl, '_blank')
+        addBanner(
+          'info',
+          'Opened Google Maps route in a new tab. Copy the URL from your browser to share.'
+        )
+      }
+    } catch (error) {
+      console.error('Error sharing all locations route:', error)
+      addBanner('error', 'Failed to create a shareable Google Maps link. Please try again.')
+    }
+  }
+
+  const loadGoogleEnrichment = async (location: DiscoverLocation) => {
+    if (googleEnrichmentLoading.has(location.id)) return
+    if (Object.prototype.hasOwnProperty.call(googleEnrichmentByLocationId, location.id)) return
+
+    setGoogleEnrichmentLoading((prev) => new Set(prev).add(location.id))
+    try {
+      // Use user location if available (for "around me"), otherwise use London center
+      const searchLocation = activeFilter === 'current-location' && userLocation 
+        ? userLocation 
+        : LONDON_CENTER
+      
+      const query = `${location.name}${activeFilter === 'current-location' && userLocation ? '' : ', London, UK'}`
+      const placeId = await findPlaceIdByText(query, searchLocation, 20000)
+      if (!placeId) {
+        setGoogleEnrichmentByLocationId((prev) => ({ ...prev, [location.id]: null }))
+        return
+      }
+
+      const details = await getPlaceDetails(placeId)
+      setGoogleEnrichmentByLocationId((prev) => ({ ...prev, [location.id]: details }))
+    } catch (error) {
+      console.error('Failed to load Google place enrichment:', error)
+      setGoogleEnrichmentByLocationId((prev) => ({ ...prev, [location.id]: null }))
+    } finally {
+      setGoogleEnrichmentLoading((prev) => {
+        const next = new Set(prev)
+        next.delete(location.id)
+        return next
+      })
+    }
+  }
+
   // Convert to itinerary
   const handleConvertToItinerary = () => {
     if (selectedLocations.length === 0) {
-      alert('Please select at least one location')
+      addBanner('error', 'Please select at least one location')
       return
     }
 
@@ -326,448 +852,802 @@ export default function TopLocationsPage() {
     router.push('/app/itinerary')
   }
 
-  // Convert locations to map format (with mock coordinates for demo)
+  // Convert locations to map format
   const mapLocations = useMemo(() => {
-    // For demo, use London coordinates with slight variations
-    const baseLat = 51.5074
-    const baseLng = -0.1278
-    
-    return filteredLocations.map((loc, index) => {
+    const LONDON_CENTER_LAT = 51.5074
+    const LONDON_CENTER_LNG = -0.1278
+
+    // If user has selected locations, show only those on the map.
+    // Otherwise, show all filtered locations.
+    const source =
+      selectedLocationIds.size > 0
+        ? filteredLocations.filter((loc) => selectedLocationIds.has(loc.id))
+        : filteredLocations
+
+    const mapped = source.map((loc) => {
       const coords = locationCoords.get(loc.id)
+
+      // If we have real coordinates from geocoding, use them (validate they're valid numbers)
+      if (coords?.lat && coords?.lng && 
+          typeof coords.lat === 'number' && typeof coords.lng === 'number' &&
+          !isNaN(coords.lat) && !isNaN(coords.lng) &&
+          coords.lat >= -90 && coords.lat <= 90 &&
+          coords.lng >= -180 && coords.lng <= 180) {
+        return {
+          name: loc.name,
+          lat: coords.lat,
+          lng: coords.lng,
+          category: loc.category.toLowerCase().replace(/\s+/g, '-'),
+        }
+      }
+
+      // Otherwise, approximate position from distance string
+      // Parse distance and use it to place marker at approximate distance from center
+      const distanceKm = parseDistance(loc.distance)
+      
+      // Use location name hash to create consistent but varied angles
+      let hash = 0
+      for (let i = 0; i < loc.name.length; i++) {
+        hash = ((hash << 5) - hash) + loc.name.charCodeAt(i)
+        hash = hash & hash // Convert to 32-bit integer
+      }
+      const angle = (Math.abs(hash) % 360) * (Math.PI / 180) // Convert to radians
+      
+      // Convert distance and angle to lat/lng offset
+      // 1 degree latitude ≈ 111 km, 1 degree longitude ≈ 111 km * cos(latitude)
+      const latOffset = (distanceKm / 111) * Math.cos(angle)
+      const lngOffset = (distanceKm / (111 * Math.cos(LONDON_CENTER_LAT * Math.PI / 180))) * Math.sin(angle)
+
       return {
         name: loc.name,
-        lat: coords?.lat || baseLat + (Math.random() - 0.5) * 0.1,
-        lng: coords?.lng || baseLng + (Math.random() - 0.5) * 0.1,
+        lat: LONDON_CENTER_LAT + latOffset,
+        lng: LONDON_CENTER_LNG + lngOffset,
         category: loc.category.toLowerCase().replace(/\s+/g, '-'),
       }
     })
-  }, [filteredLocations, locationCoords])
+
+    // Show a "You" marker when using around-me mode
+    if (activeFilter === 'current-location' && userLocation) {
+      return [
+        { name: 'You', lat: userLocation.lat, lng: userLocation.lng, category: 'you' },
+        ...mapped,
+      ]
+    }
+
+    return mapped
+  }, [filteredLocations, selectedLocationIds, locationCoords, activeFilter, userLocation])
 
   const LocationCard = ({ location, index }: { location: DiscoverLocation; index: number }) => {
     const isHighRated = location.rating > 4.7
     const isSelected = selectedLocationIds.has(location.id)
-    const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location.name + ', London, UK')}`
+    const enrichment = googleEnrichmentByLocationId[location.id]
+    const isLoading = googleEnrichmentLoading.has(location.id)
+
+    useEffect(() => {
+      if (index < AUTO_ENRICH_COUNT) {
+        void loadGoogleEnrichment(location)
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [index, location.id])
 
     return (
-      <m.div
-        className="cursor-pointer"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, delay: index * 0.05 }}
+      <div
+        className={`bg-white rounded-2xl border ${
+          isSelected ? 'border-primary ring-2 ring-primary/20 shadow-lg' : 'border-gray-200 shadow'
+        } p-4 md:p-5 flex flex-col md:flex-row gap-4`}
         onClick={() => toggleLocationSelection(location.id)}
       >
-        <Card 
-          className={`overflow-hidden relative border-2 transition-all ${
-            isSelected 
-              ? 'border-primary shadow-xl ring-2 ring-primary/20' 
-              : 'border-gray-200 hover:border-primary/50'
-          }`}
-          hover
-          padding="none"
-        >
-          {/* Selection Checkbox - Top Left */}
-          <div className="absolute top-4 left-4 z-10">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-primary text-white flex items-center justify-center font-bold text-base md:text-lg">
+            #{index + 1}
+          </div>
+          <div className="flex flex-col">
+            <h3 className="font-bold text-gray-900 text-base md:text-lg">{location.name}</h3>
+            <div className="flex items-center gap-2 mt-1">
+              <Badge variant="outline" className="text-xs bg-secondary/50 border-primary/20 text-primary">
+                {location.category}
+              </Badge>
+              <div className="flex items-center gap-1 text-xs text-gray-600">
+                <Star className="w-3.5 h-3.5 fill-yellow-400 text-yellow-400" />
+                <span className="font-semibold text-gray-900">{enrichment?.rating ?? location.rating}</span>
+                <span className="text-[11px] text-gray-500">
+                  ({formatReviews(enrichment?.reviews ?? location.reviews)})
+                </span>
+              </div>
+              {isHighRated && (
+                <span className="text-[11px] text-primary font-semibold px-2 py-0.5 bg-primary/10 rounded-full">
+                  ⭐ Top Rated
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm text-gray-700 leading-relaxed mt-1 md:mt-0">
+            {enrichment?.description?.trim() || location.description}
+          </p>
+          
+          {/* Address */}
+          {enrichment?.address && (
+            <div className="flex items-start gap-2 mt-2">
+              <MapPin className="w-3.5 h-3.5 text-primary mt-0.5 flex-shrink-0" />
+              <p className="text-xs text-gray-600">{enrichment.address}</p>
+            </div>
+          )}
+
+          {/* Phone */}
+          {enrichment?.phone && (
+            <div className="flex items-center gap-2 mt-2">
+              <Phone className="w-3.5 h-3.5 text-primary" />
+              <a
+                href={`tel:${enrichment.phone}`}
+                className="text-xs text-gray-600 hover:text-primary hover:underline"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {enrichment.phone}
+              </a>
+            </div>
+          )}
+
+          {/* Opening Hours */}
+          {enrichment?.openingHours && enrichment.openingHours.length > 0 && (
+            <div className="mt-2">
+              <div className="flex items-start gap-2">
+                <Clock className="w-3.5 h-3.5 text-primary mt-0.5 flex-shrink-0" />
+                <div className="text-xs text-gray-600">
+                  {enrichment.openingHours.slice(0, 3).map((hours, idx) => (
+                    <div key={idx}>{hours}</div>
+                  ))}
+                  {enrichment.openingHours.length > 3 && (
+                    <div className="text-gray-400 italic">+{enrichment.openingHours.length - 3} more days</div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Price Level */}
+          {enrichment?.priceLevel !== undefined && (
+            <div className="flex items-center gap-2 mt-2">
+              <DollarSign className="w-3.5 h-3.5 text-primary" />
+              <span className="text-xs text-gray-600">
+                {enrichment.priceLevel === 0 && 'Free'}
+                {enrichment.priceLevel === 1 && 'Inexpensive ($)'}
+                {enrichment.priceLevel === 2 && 'Moderate ($$)'}
+                {enrichment.priceLevel === 3 && 'Expensive ($$$)'}
+                {enrichment.priceLevel === 4 && 'Very Expensive ($$$$)'}
+              </span>
+            </div>
+          )}
+
+          {/* Photos */}
+          {enrichment?.photos && enrichment.photos.length > 0 && (
+            <div className="mt-2 flex gap-2 overflow-x-auto pb-2">
+              {enrichment.photos.slice(0, 3).map((photo, idx) => (
+                <a
+                  key={idx}
+                  href={photo}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="flex-shrink-0"
+                >
+                  <img
+                    src={photo}
+                    alt={`${location.name} photo ${idx + 1}`}
+                    className="w-20 h-20 object-cover rounded-lg border border-gray-200 hover:border-primary transition-colors"
+                  />
+                </a>
+              ))}
+              {enrichment.photos.length > 3 && (
+                <div className="flex-shrink-0 w-20 h-20 rounded-lg border border-gray-200 bg-gray-100 flex items-center justify-center text-xs text-gray-500">
+                  +{enrichment.photos.length - 3}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Action Links */}
+          <div className="flex items-center gap-3 text-xs text-gray-600 mt-3 flex-wrap">
+            <div className="flex items-center gap-1">
+              <MapPin className="w-3.5 h-3.5 text-primary" />
+              <span>{location.distance} away</span>
+            </div>
+            
+            {enrichment?.website && (
+              <a
+                href={enrichment.website}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-primary font-semibold hover:underline"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                Website
+              </a>
+            )}
+
+            {enrichment?.googleMapsUrl && (
+              <a
+                href={enrichment.googleMapsUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-primary font-semibold hover:underline"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <MapIcon className="w-3.5 h-3.5" />
+                Google Maps
+              </a>
+            )}
+
             <button
+              type="button"
+              className="inline-flex items-center gap-1 text-primary font-semibold hover:underline"
               onClick={(e) => {
                 e.stopPropagation()
-                toggleLocationSelection(location.id)
+                void loadGoogleEnrichment(location)
               }}
-              className={`w-8 h-8 rounded-full flex items-center justify-center transition-all shadow-md ${
-                isSelected
-                  ? 'bg-primary text-white'
-                  : 'bg-white border-2 border-gray-300 text-gray-400 hover:border-primary/50'
-              }`}
+              disabled={isLoading}
             >
-              {isSelected && <Check className="w-5 h-5" />}
+              {isLoading ? 'Loading…' : enrichment ? 'Refresh' : 'Load details'}
             </button>
           </div>
-
-          {/* Review Count Badge - Top Right */}
-          <div className="absolute top-4 right-4 z-10 flex gap-2">
-            <Badge variant="default" className="bg-primary text-white font-semibold shadow-md">
-              {formatReviews(location.reviews)}
-            </Badge>
-            <a
-              href={googleMapsUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
-              className="p-2 bg-white rounded-full shadow-md hover:bg-secondary transition-colors"
-              title="Open in Google Maps"
-            >
-              <ExternalLink className="w-4 h-4 text-primary" />
-            </a>
-          </div>
-
-          <div className="flex gap-4 p-6 pl-16">
-            {/* Rank Badge */}
-            <div className="flex-shrink-0">
-              <div className="w-14 h-14 rounded-full bg-primary text-white flex items-center justify-center font-bold text-lg shadow-md">
-                #{index + 1}
-              </div>
-            </div>
-
-            {/* Image */}
-            <div className="w-28 h-28 rounded-2xl bg-gray-200 flex-shrink-0 overflow-hidden relative shadow-md">
-              <Image
-                src={getImageUrl(location.image, 'location')}
-                alt={location.name}
-                fill
-                className="object-cover"
-                sizes="112px"
-              />
-            </div>
-
-            {/* Content */}
-            <div className="flex-1 min-w-0">
-              <div className="flex items-start justify-between gap-2 mb-2">
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-bold text-gray-900 text-lg truncate mb-1">{location.name}</h3>
-                  <div className="flex items-center gap-2 mb-2">
-                    <Badge variant="outline" className="text-xs bg-secondary/50 border-primary/20 text-primary">
-                      {location.category}
-                    </Badge>
-                  </div>
-                </div>
-              </div>
-              
-              <p className="text-sm text-gray-700 line-clamp-2 mb-3 leading-relaxed">{location.description}</p>
-              
-              {/* Rating and Info */}
-              <div className="flex items-center gap-3 flex-wrap">
-                <div className="flex items-center gap-1.5">
-                  <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                  <span className="font-semibold text-gray-900">{location.rating}</span>
-                  <span className="text-xs text-gray-500">
-                    ({formatReviews(location.reviews)})
-                  </span>
-                </div>
-                
-                {isHighRated && (
-                  <m.span
-                    className="text-xs text-primary font-semibold px-2 py-0.5 bg-primary/10 rounded-full"
-                    animate={{ opacity: [1, 0.7, 1] }}
-                    transition={{ duration: 2, repeat: Infinity }}
-                  >
-                    ⭐ Top Rated
-                  </m.span>
-                )}
-                
-                <div className="flex items-center gap-1 text-xs text-gray-600">
-                  <MapPin className="w-3.5 h-3.5 text-primary" />
-                  <span>{location.distance} away</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </Card>
-      </m.div>
+        </div>
+      </div>
     )
   }
 
   return (
     <main id="main-content" className="min-h-screen bg-background">
-      <Header />
-      <div className="min-h-screen bg-background pt-20">
-      {/* Page Header */}
-      <header className="sticky top-20 z-20 bg-white border-b border-gray-200 shadow-sm px-4 sm:px-6 py-5">
-        <div className="container mx-auto">
-          <div className="flex items-start gap-4 mb-5">
-            <Link
-              href="/discover"
-              className="p-2 hover:bg-secondary rounded-xl transition-colors mt-1"
-            >
-              <ArrowLeft className="w-5 h-5 text-gray-700" />
-            </Link>
-            <div className="flex-1 min-w-0">
-              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
-                {activeFilter === 'current-location' ? `Best places in ${locationName}` : 'Top Rated Locations'}
-              </h1>
-              <p className="text-sm text-gray-600 leading-relaxed">
-                {activeFilter === 'current-location' 
-                  ? 'Discover the best rated places in My Current Location, curated using our unique algorithm blending Top Rated and Most Reviewed establishments.'
-                  : 'Discover the best places to visit'}
-              </p>
-            </div>
-            <Button
-              onClick={() => setShowMap(!showMap)}
-              variant={showMap ? 'primary' : 'outline'}
-              className={`flex items-center gap-2 shrink-0 ${
-                showMap ? 'bg-primary hover:bg-primary-600' : ''
-              }`}
-            >
-              <MapIcon className="w-4 h-4" />
-              <span className="hidden sm:inline">{showMap ? 'Hide Map' : 'Show Map'}</span>
-            </Button>
-          </div>
-
-          <div className="flex items-center gap-4 mb-5">
-            <div className="flex-1 max-w-md">
-              <Input
-                placeholder="Search locations..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                icon={<Search className="w-4 h-4 text-primary" />}
-                className="rounded-2xl border-gray-300 focus:border-primary focus:ring-primary"
-              />
-            </div>
-          </div>
-
-          {/* Filter Bar */}
-          <div className="flex items-center gap-2 mb-4 flex-wrap">
-            <Filter className="w-4 h-4 text-primary" />
-            {(['all', 'current-location', 'best', 'top-rated', 'hidden-gems'] as FilterType[]).map((filter) => (
-              <Badge
-                key={filter}
-                variant={activeFilter === filter ? 'default' : 'outline'}
-                className={`cursor-pointer capitalize rounded-full transition-all ${
-                  activeFilter === filter 
-                    ? 'bg-primary text-white border-primary shadow-md' 
-                    : 'bg-white border-gray-300 text-gray-700 hover:border-primary/50 hover:text-primary'
-                }`}
-                onClick={() => setActiveFilter(filter)}
+      <div className="min-h-screen bg-background">
+        {/* Page Header */}
+        <header className="sticky top-20 z-20 bg-white border-b border-gray-200 shadow-sm px-4 sm:px-6 py-5">
+          <div className="container mx-auto">
+            <div className="flex items-start gap-4">
+              <Link
+                href="/discover"
+                className="p-2 hover:bg-secondary rounded-xl transition-colors mt-1"
               >
-                {filter === 'all' 
-                  ? 'All' 
-                  : filter === 'current-location'
-                  ? '📍 My Current Location'
-                  : filter === 'best' 
-                  ? '🔥 Best' 
-                  : filter === 'top-rated' 
-                  ? '🏆 Top Rated' 
-                  : '💎 Hidden Gems'}
-              </Badge>
-            ))}
-          </div>
-
-          {/* Sort Options */}
-          <div className="mb-4">
-            <p className="text-sm font-semibold text-gray-900 mb-2">Sort Results By</p>
-            <ToggleGroup type="single" value={sortBy} onValueChange={(v) => v && setSortBy(v as SortType)} className="flex-wrap gap-2">
-              <ToggleGroupItem value="best" aria-label="Best" className="rounded-full">
-                🔥 Best
-              </ToggleGroupItem>
-              <ToggleGroupItem value="top-rated" aria-label="Top rated" className="rounded-full">
-                🏆 Top rated
-              </ToggleGroupItem>
-              <ToggleGroupItem value="most-reviewed" aria-label="Most reviewed" className="rounded-full">
-                🤩 Most reviewed
-              </ToggleGroupItem>
-              <ToggleGroupItem value="hidden-gems" aria-label="Hidden gems" className="rounded-full">
-                💎 Hidden gems
-              </ToggleGroupItem>
-              <ToggleGroupItem value="worst-rated" aria-label="Worst rated" className="rounded-full">
-                🤬 Worst rated
-              </ToggleGroupItem>
-              <ToggleGroupItem value="recently-discovered" aria-label="Recently discovered" className="rounded-full">
-                🆕 Recently discovered
-              </ToggleGroupItem>
-            </ToggleGroup>
-          </div>
-
-          {/* Search Radius (for current location) */}
-          {activeFilter === 'current-location' && (
-            <div className="mb-5">
-              <p className="text-sm font-semibold text-gray-900 mb-2">Search Radius</p>
-              <div className="flex flex-wrap gap-2">
-                {[0.1, 0.2, 0.5, 1, 2, 5, 10, 30, 50, 100].map((radius) => (
-                  <Badge
-                    key={radius}
-                    variant={searchRadius === radius ? 'default' : 'outline'}
-                    className={`cursor-pointer rounded-full transition-all ${
-                      searchRadius === radius 
-                        ? 'bg-primary text-white border-primary' 
-                        : 'bg-white border-gray-300 text-gray-700 hover:border-primary/50'
-                    }`}
-                    onClick={() => setSearchRadius(radius)}
-                  >
-                    {radius} km
-                  </Badge>
-                ))}
+                <ArrowLeft className="w-5 h-5 text-gray-700" />
+              </Link>
+              <div className="flex-1 min-w-0">
+                <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
+                  {activeFilter === 'current-location' ? `Best places in ${locationName}` : 'Top Rated Locations'}
+                </h1>
+                <p className="text-sm text-gray-600 leading-relaxed">
+                  {activeFilter === 'current-location'
+                    ? 'Discover the best rated places around you, blending top ratings with real visitor volume.'
+                    : 'Discover the best places to visit, curated by rating, reviews, and hidden gems.'}
+                </p>
               </div>
+            </div>
+          </div>
+        </header>
+
+        {/* Content */}
+        <div className="container mx-auto px-4 sm:px-6 py-6 bg-background">
+          {/* Banners (no animation to avoid opacity/transform issues) */}
+          {banners.length > 0 && (
+            <div className="mb-4 space-y-2">
+              {banners.map((banner) => (
+                <div
+                  key={banner.id}
+                  className={`rounded-lg p-4 flex items-start justify-between gap-4 shadow-sm ${
+                    banner.type === 'error'
+                      ? 'bg-red-50 border border-red-200'
+                      : banner.type === 'success'
+                      ? 'bg-green-50 border border-green-200'
+                      : 'bg-blue-50 border border-blue-200'
+                  }`}
+                >
+                  <div className="flex items-start gap-3 flex-1">
+                    {banner.type === 'error' ? (
+                      <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                    ) : banner.type === 'success' ? (
+                      <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+                    ) : (
+                      <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                    )}
+                    <p
+                      className={`text-sm font-medium ${
+                        banner.type === 'error'
+                          ? 'text-red-900'
+                          : banner.type === 'success'
+                          ? 'text-green-900'
+                          : 'text-blue-900'
+                      }`}
+                    >
+                      {banner.message}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => removeBanner(banner.id)}
+                    className={`flex-shrink-0 ${
+                      banner.type === 'error'
+                        ? 'text-red-600 hover:text-red-800'
+                        : banner.type === 'success'
+                        ? 'text-green-600 hover:text-green-800'
+                        : 'text-blue-600 hover:text-blue-800'
+                    }`}
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
             </div>
           )}
 
-          {/* Number of Reviews Filter */}
-          <div className="mb-5">
-            <p className="text-sm font-semibold text-gray-900 mb-2">Number of Reviews</p>
-            <div className="flex flex-wrap gap-2">
-              {[
-                { label: '1 to 30 reviews', min: 1, max: 30 },
-                { label: '30 to 200 reviews', min: 30, max: 200 },
-                { label: '200 to 500 reviews', min: 200, max: 500 },
-                { label: '30+ reviews', min: 30, max: 100000 },
-                { label: '100+ reviews', min: 100, max: 100000 },
-                { label: '500+ reviews', min: 500, max: 100000 },
-                { label: '1000+ reviews', min: 1000, max: 100000 },
-              ].map((range) => (
-                <Badge
-                  key={range.label}
-                  variant={minReviews === range.min && maxReviews === range.max ? 'default' : 'outline'}
-                  className={`cursor-pointer rounded-full transition-all ${
-                    minReviews === range.min && maxReviews === range.max
-                      ? 'bg-primary text-white border-primary' 
-                      : 'bg-white border-gray-300 text-gray-700 hover:border-primary/50'
-                  }`}
-                  onClick={() => {
-                    setMinReviews(range.min)
-                    setMaxReviews(range.max)
+          {/* Search and Around Me Bar - spans across both columns */}
+          <div className="mb-6 bg-white rounded-2xl shadow-md border border-gray-200 p-4">
+            <div className="flex flex-col lg:flex-row items-start lg:items-center gap-4">
+              {/* Search Input */}
+        <div className="flex-1 w-full lg:max-w-md relative">
+                <Input
+                  placeholder="Search locations..."
+                  value={searchQuery}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value)
+                    setShowSuggestions(true)
                   }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                void handleSearchLocationByText()
+                    }
+                  }}
+                  icon={<Search className="w-4 h-4 text-primary" />}
+                  className="rounded-2xl border-gray-300 focus:border-primary focus:ring-primary"
+                />
+
+                {/* Autocomplete dropdown (Google Places API - worldwide) */}
+                {showSuggestions && (autocompleteSuggestions.length > 0 || loadingAutocomplete) && (
+                  <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto z-30">
+                    {loadingAutocomplete ? (
+                      <div className="px-3 py-2 text-sm text-gray-500 flex items-center gap-2">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                        Searching...
+                      </div>
+                    ) : (
+                      autocompleteSuggestions.map((suggestion, index) => (
+                        <button
+                          key={`${suggestion.placeId}-${index}`}
+                          type="button"
+                          className="w-full px-3 py-2 text-left text-sm hover:bg-secondary/40 flex items-center gap-2"
+                          onClick={async () => {
+                            // When user selects a suggestion, geocode it and set as location
+                            setSearchQuery(suggestion.description)
+                            setShowSuggestions(false)
+                            
+                          // Geocode the selected location
+                          const coords = await geocodeAddress(suggestion.description)
+                          if (coords) {
+                            setLocationFromCoords(
+                              { lat: coords.lat, lng: coords.lng },
+                              suggestion.description,
+                              2,
+                              `Showing locations within 2km of ${suggestion.description}.`
+                            )
+                          } else {
+                            // Fallback: just commit the search query
+                            setCommittedSearchQuery(suggestion.description)
+                          }
+                          }}
+                        >
+                          <MapPin className="w-3.5 h-3.5 text-primary flex-shrink-0" />
+                          <span className="font-medium text-gray-900 truncate">{suggestion.description}</span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Around me + radius */}
+              <div className="flex items-center gap-3 flex-wrap">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="rounded-full"
+                  onClick={handleSearchLocationByText}
+                  disabled={isSearchingLocation}
                 >
-                  {range.label}
-                </Badge>
-              ))}
+                  {isSearchingLocation ? 'Searching…' : 'Search this location'}
+                </Button>
+
+                <Button
+                  type="button"
+                  variant={activeFilter === 'current-location' ? 'primary' : 'outline'}
+                  className="rounded-full"
+                  onClick={() => enableAroundMe()}
+                >
+                  📍 Around me
+                </Button>
+
+                {activeFilter === 'current-location' && (
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-semibold text-gray-700 uppercase tracking-wide">
+                      Radius
+                    </span>
+                    {RADIUS_OPTIONS_KM.map((radius) => (
+                      <Badge
+                        key={radius}
+                        variant={searchRadius === radius ? 'default' : 'outline'}
+                        className={`cursor-pointer rounded-full transition-all ${
+                          searchRadius === radius
+                            ? 'bg-primary text-white border-primary'
+                            : 'bg-white border-gray-300 text-gray-700 hover:border-primary/50'
+                        }`}
+                        onClick={() => setSearchRadius(radius)}
+                      >
+                        {radius} km
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
-          {/* Category Filter */}
-          <div className="mb-5">
-            <p className="text-sm font-semibold text-gray-900 mb-2">Categories</p>
-            <div className="flex flex-wrap gap-2">
-              {allCategories.map((category) => (
-                <Badge
-                  key={category}
-                  variant={selectedCategories.includes(category) ? 'default' : 'outline'}
-                  className={`cursor-pointer rounded-full transition-all ${
-                    selectedCategories.includes(category)
-                      ? 'bg-primary text-white border-primary' 
-                      : 'bg-white border-gray-300 text-gray-700 hover:border-primary/50'
-                  }`}
-                  onClick={() => {
-                    setSelectedCategories(prev =>
-                      prev.includes(category)
-                        ? prev.filter(c => c !== category)
-                        : [...prev, category]
+          {/* Two-column layout: filters left, map + list right */}
+          <div className="grid grid-cols-1 lg:grid-cols-[320px,minmax(0,1fr)] gap-6">
+            {/* Filters Sidebar */}
+            <aside className="bg-white rounded-2xl shadow-md border border-gray-200 p-4 h-fit sticky top-28">
+
+              {/* Filter Bar */}
+              <div className="mb-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Filter className="w-4 h-4 text-primary" />
+                  <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide">
+                    Quick filters
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {(['all', 'current-location', 'best', 'top-rated', 'hidden-gems'] as FilterType[]).map(
+                    (filter) => (
+                      <Badge
+                        key={filter}
+                        variant={activeFilter === filter ? 'default' : 'outline'}
+                        className={`cursor-pointer capitalize rounded-full transition-all ${
+                          activeFilter === filter
+                            ? 'bg-primary text-white border-primary shadow-md'
+                            : 'bg-white border-gray-300 text-gray-700 hover:border-primary/50 hover:text-primary'
+                        }`}
+                        onClick={() => setActiveFilter(filter)}
+                      >
+                        {filter === 'all'
+                          ? 'All'
+                          : filter === 'current-location'
+                          ? '📍 Near me'
+                          : filter === 'best'
+                          ? '🔥 Best'
+                          : filter === 'top-rated'
+                          ? '🏆 Top rated'
+                          : '💎 Hidden gems'}
+                      </Badge>
                     )
-                  }}
-                >
-                  {category}
-                </Badge>
-              ))}
-              {selectedCategories.length > 0 && (
-                <Badge
-                  variant="outline"
-                  className="cursor-pointer text-red-600 border-red-600 rounded-full hover:bg-red-50"
-                  onClick={() => setSelectedCategories([])}
-                >
-                  <X className="w-3 h-3 mr-1" />
-                  Clear
-                </Badge>
-              )}
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {/* Content */}
-      <div className="container mx-auto px-4 sm:px-6 py-6 bg-background">
-        {/* Map View */}
-        {showMap && (
-          <Card className="mb-6 h-96 overflow-hidden border-2 border-gray-200 shadow-lg relative" padding="none">
-            {mapLocations.length > 0 ? (
-              <SimpleMap
-                locations={mapLocations}
-                selectedDay={1}
-                showRoute={false}
-                onLocationClick={(loc) => {
-                  const location = filteredLocations.find(l => l.name === loc.name)
-                  if (location) {
-                    openInGoogleMaps({ name: location.name })
-                  }
-                }}
-              />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center bg-secondary/30">
-                <div className="text-center">
-                  <MapPin className="w-12 h-12 text-primary/40 mx-auto mb-2" />
-                  <p className="text-gray-600">No locations to display on map</p>
+                  )}
                 </div>
               </div>
-            )}
-          </Card>
-        )}
 
-        {/* Results Header */}
-        <div className="mb-6">
-          <div className="flex items-center justify-between flex-wrap gap-4 mb-4">
-            <div>
-              <h2 className="text-xl font-bold text-gray-900 mb-1">
-                {filteredLocations.length} {activeFilter === 'all' ? 'locations' : activeFilter === 'best' ? 'best locations' : activeFilter === 'top-rated' ? 'top-rated locations' : activeFilter === 'current-location' ? 'locations near you' : 'hidden gems'}
-              </h2>
-              {selectedLocationIds.size > 0 && (
-                <p className="text-sm text-primary font-semibold mt-1 flex items-center gap-1">
-                  <Check className="w-4 h-4" />
-                  {selectedLocationIds.size} location{selectedLocationIds.size !== 1 ? 's' : ''} selected
+              {/* Sort Options */}
+              <div className="mb-4">
+                <p className="text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">
+                  Sort results
                 </p>
-              )}
-              {activeFilter === 'current-location' && (
-                <p className="text-xs text-gray-500 mt-2">
-                  Please note that certain place categories are intentionally excluded to ensure a refined selection.
-                </p>
-              )}
-            </div>
-            
-            {/* Action Buttons */}
-            {selectedLocationIds.size > 0 && (
-              <div className="flex gap-3 flex-wrap">
-                <Button
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    handleCreateCircularRoute()
-                  }}
-                  variant="outline"
-                  className="flex items-center gap-2"
+                <ToggleGroup
+                  type="single"
+                  value={sortBy}
+                  onValueChange={(v) => v && setSortBy(v as SortType)}
+                  className="flex-wrap gap-2"
                 >
-                  <Route className="w-4 h-4" />
-                  Create Route
-                </Button>
-                <Button
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    handleConvertToItinerary()
-                  }}
-                  variant="primary"
-                  className="flex items-center gap-2 bg-primary hover:bg-primary-600"
-                >
-                  <Calendar className="w-4 h-4" />
-                  Convert to Itinerary
-                </Button>
+                  <ToggleGroupItem value="best" aria-label="Best" className="rounded-full">
+                    🔥 Best
+                  </ToggleGroupItem>
+                  <ToggleGroupItem value="top-rated" aria-label="Top rated" className="rounded-full">
+                    🏆 Top rated
+                  </ToggleGroupItem>
+                  <ToggleGroupItem
+                    value="most-reviewed"
+                    aria-label="Most reviewed"
+                    className="rounded-full"
+                  >
+                    🤩 Most reviewed
+                  </ToggleGroupItem>
+                  <ToggleGroupItem
+                    value="hidden-gems"
+                    aria-label="Hidden gems"
+                    className="rounded-full"
+                  >
+                    💎 Hidden gems
+                  </ToggleGroupItem>
+                  <ToggleGroupItem
+                    value="worst-rated"
+                    aria-label="Worst rated"
+                    className="rounded-full"
+                  >
+                    🤬 Worst rated
+                  </ToggleGroupItem>
+                  <ToggleGroupItem
+                    value="recently-discovered"
+                    aria-label="Recently discovered"
+                    className="rounded-full"
+                  >
+                    🆕 Recently discovered
+                  </ToggleGroupItem>
+                </ToggleGroup>
               </div>
-            )}
+
+              {/* Search Radius (for current location) */}
+              {activeFilter === 'current-location' && (
+                <div className="mb-4">
+                  <p className="text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">
+                    Search radius
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {[0.1, 0.2, 0.5, 1, 2, 5, 10, 30, 50, 100].map((radius) => (
+                      <Badge
+                        key={radius}
+                        variant={searchRadius === radius ? 'default' : 'outline'}
+                        className={`cursor-pointer rounded-full transition-all ${
+                          searchRadius === radius
+                            ? 'bg-primary text-white border-primary'
+                            : 'bg-white border-gray-300 text-gray-700 hover:border-primary/50'
+                        }`}
+                        onClick={() => setSearchRadius(radius)}
+                      >
+                        {radius} km
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Number of Reviews Filter */}
+              <div className="mb-4">
+                <p className="text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">
+                  Review count
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { label: '1 to 30 reviews', min: 1, max: 30 },
+                    { label: '30 to 200 reviews', min: 30, max: 200 },
+                    { label: '200 to 500 reviews', min: 200, max: 500 },
+                    { label: '30+ reviews', min: 30, max: 100000 },
+                    { label: '100+ reviews', min: 100, max: 100000 },
+                    { label: '500+ reviews', min: 500, max: 100000 },
+                    { label: '1000+ reviews', min: 1000, max: 100000 },
+                  ].map((range) => (
+                    <Badge
+                      key={range.label}
+                      variant={minReviews === range.min && maxReviews === range.max ? 'default' : 'outline'}
+                      className={`cursor-pointer rounded-full transition-all ${
+                        minReviews === range.min && maxReviews === range.max
+                          ? 'bg-primary text-white border-primary'
+                          : 'bg-white border-gray-300 text-gray-700 hover:border-primary/50'
+                      }`}
+                      onClick={() => {
+                        setMinReviews(range.min)
+                        setMaxReviews(range.max)
+                      }}
+                    >
+                      {range.label}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+
+              {/* Category Filter */}
+              <div className="mb-2">
+                <p className="text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">
+                  Categories
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {allCategories.map((category) => (
+                    <Badge
+                      key={category}
+                      variant={selectedCategories.includes(category) ? 'default' : 'outline'}
+                      className={`cursor-pointer rounded-full transition-all ${
+                        selectedCategories.includes(category)
+                          ? 'bg-primary text-white border-primary'
+                          : 'bg-white border-gray-300 text-gray-700 hover:border-primary/50'
+                      }`}
+                      onClick={() => {
+                        setSelectedCategories((prev) =>
+                          prev.includes(category)
+                            ? prev.filter((c) => c !== category)
+                            : [...prev, category]
+                        )
+                      }}
+                    >
+                      {category}
+                    </Badge>
+                  ))}
+                  {selectedCategories.length > 0 && (
+                    <Badge
+                      variant="outline"
+                      className="cursor-pointer text-red-600 border-red-600 rounded-full hover:bg-red-50"
+                      onClick={() => setSelectedCategories([])}
+                    >
+                      <X className="w-3 h-3 mr-1" />
+                      Clear
+                    </Badge>
+                  )}
+                </div>
+              </div>
+            </aside>
+
+            {/* Map + Results */}
+            <section className="space-y-5">
+              {/* Map View (always visible) */}
+              <Card className="h-80 md:h-96 overflow-hidden border-2 border-gray-200 shadow-lg relative" padding="none">
+                {mapLocations.length > 0 ? (
+                  <SimpleMap
+                    locations={mapLocations}
+                    selectedDay={1}
+                    showRoute={false}
+                    onLocationClick={(loc) => {
+                      if (loc.name === 'You') return
+                      const location = filteredLocations.find((l) => l.name === loc.name)
+                      if (location) {
+                        openInGoogleMaps({ name: location.name })
+                      }
+                    }}
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center bg-secondary/30">
+                    <div className="text-center">
+                      <MapPin className="w-12 h-12 text-primary/40 mx-auto mb-2" />
+                      <p className="text-gray-600">No locations to display on map</p>
+                    </div>
+                  </div>
+                )}
+              </Card>
+
+              {/* Results Header */}
+              <div className="mb-2">
+                <div className="flex items-center justify-between flex-wrap gap-4 mb-2">
+                  <div>
+                    <h2 className="text-xl font-bold text-gray-900 mb-1">
+                      {filteredLocations.length}{' '}
+                      {activeFilter === 'all'
+                        ? 'locations'
+                        : activeFilter === 'best'
+                        ? 'best locations'
+                        : activeFilter === 'top-rated'
+                        ? 'top-rated locations'
+                        : activeFilter === 'current-location'
+                        ? 'locations near you'
+                        : 'hidden gems'}
+                    </h2>
+                    {selectedLocationIds.size > 0 && (
+                      <p className="text-sm text-primary font-semibold mt-1 flex items-center gap-1">
+                        <Check className="w-4 h-4" />
+                        {selectedLocationIds.size} location
+                        {selectedLocationIds.size !== 1 ? 's' : ''} selected
+                      </p>
+                    )}
+                    {activeFilter === 'current-location' && (
+                      <p className="text-xs text-gray-500 mt-2">
+                        Certain place categories are intentionally excluded to keep results high quality.
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="flex flex-col items-start gap-2">
+                    {/* Global actions for all visible results */}
+                    {allVisibleLocations.length > 0 && (
+                      <div className="flex gap-3 flex-wrap items-center">
+                        <Button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleCreateRouteForAll()
+                          }}
+                          variant="outline"
+                          className="flex items-center gap-2"
+                        >
+                          <Navigation className="w-4 h-4" />
+                          Open All in Google Maps
+                        </Button>
+                        <Button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleShareAll()
+                          }}
+                          variant="secondary"
+                          className="flex items-center gap-2"
+                        >
+                          <MapIcon className="w-4 h-4" />
+                          Share All as Link
+                        </Button>
+
+                        {/* When showing cached DB results, allow the user to refresh to live data */}
+                        {activeFilter === 'current-location' && resultsSource === 'cached' && (
+                          <Button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              void searchAroundMe({ bypassCache: true })
+                            }}
+                            variant="ghost"
+                            className="flex items-center gap-1 text-xs text-gray-700 hover:text-primary"
+                          >
+                            <RefreshCw className="w-3.5 h-3.5" />
+                            Refresh results
+                          </Button>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Action Buttons for selected locations */}
+                    {selectedLocationIds.size > 0 && (
+                      <div className="flex gap-3 flex-wrap">
+                        <Button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleCreateCircularRoute()
+                          }}
+                          variant="outline"
+                          className="flex items-center gap-2"
+                        >
+                          <Route className="w-4 h-4" />
+                          Create Route from Selection
+                        </Button>
+                        <Button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleConvertToItinerary()
+                            addBanner('success', 'Converted to itinerary — opening planner...')
+                          }}
+                          variant="primary"
+                          className="flex items-center gap-2 bg-primary hover:bg-primary-600"
+                        >
+                          <Calendar className="w-4 h-4" />
+                          Convert Selection to Itinerary
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {loadingAroundMe && activeFilter === 'current-location' ? (
+                <Card className="text-center py-16 min-h-[320px] flex flex-col items-center justify-center bg-secondary/20">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+                  <p className="text-gray-900 text-lg font-semibold mb-2">Finding places near you...</p>
+                  <p className="text-gray-600 text-sm">Searching within {searchRadius} km radius</p>
+                </Card>
+              ) : filteredLocations.length > 0 ? (
+                <div className="space-y-4 pb-6" style={{ minHeight: '200px' }}>
+                  {filteredLocations.map((location, index) => (
+                    <LocationCard key={`location-${location.id}-${index}`} location={location} index={index} />
+                  ))}
+                </div>
+              ) : (
+                <Card className="text-center py-16 min-h-[320px] flex flex-col items-center justify-center bg-secondary/20">
+                  <MapPin className="w-16 h-16 text-primary/40 mb-4" />
+                  <p className="text-gray-900 text-lg font-semibold mb-2">No locations found</p>
+                  <p className="text-gray-600 text-sm mb-6 max-w-md">
+                    {!discoverLocations || discoverLocations.length === 0
+                      ? 'No locations available. Please check the data source.'
+                      : `Try changing the filters or search. Found ${discoverLocations.length} total locations.`}
+                  </p>
+                  <Button
+                    onClick={() => {
+                      setActiveFilter('all')
+                      setSearchQuery('')
+                      setSelectedCategories([])
+                      setMinReviews(0)
+                      setMaxReviews(100000)
+                    }}
+                    variant="primary"
+                    className="bg-primary hover:bg-primary-600"
+                  >
+                    Show All Locations
+                  </Button>
+                </Card>
+              )}
+            </section>
           </div>
         </div>
-
-        {filteredLocations.length > 0 ? (
-          <div className="space-y-4 pb-6">
-            {filteredLocations.map((location, index) => (
-              <LocationCard key={location.id} location={location} index={index} />
-            ))}
-          </div>
-        ) : (
-          <Card className="text-center py-16 min-h-[400px] flex flex-col items-center justify-center bg-secondary/20">
-            <MapPin className="w-16 h-16 text-primary/40 mb-4" />
-            <p className="text-gray-900 text-lg font-semibold mb-2">No locations found</p>
-            <p className="text-gray-600 text-sm mb-6 max-w-md">
-              {!discoverLocations || discoverLocations.length === 0 
-                ? 'No locations available. Please check the data source.'
-                : `Try changing the filter or search. Found ${discoverLocations.length} total locations.`}
-            </p>
-            <Button
-              onClick={() => {
-                setActiveFilter('all')
-                setSearchQuery('')
-                setSelectedCategories([])
-                setMinReviews(0)
-                setMaxReviews(100000)
-              }}
-              variant="primary"
-              className="bg-primary hover:bg-primary-600"
-            >
-              Show All Locations
-            </Button>
-          </Card>
-        )}
-      </div>
       </div>
       <Footer />
     </main>

@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { m } from 'framer-motion'
 import {
   MapPin,
   Calendar,
@@ -100,7 +99,7 @@ export default function TripCreation() {
           <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 space-y-4 sm:space-y-6">
             {/* Destination */}
             <div>
-              <label className="flex items-center gap-2 text-gray-700 font-semibold mb-2">
+              <label htmlFor="destination" className="flex items-center gap-2 text-gray-700 font-semibold mb-2">
                 <MapPin className="w-5 h-5 text-primary-600" />
                 Destination
               </label>
@@ -123,7 +122,7 @@ export default function TripCreation() {
 
             {/* Days */}
             <div>
-              <label className="flex items-center gap-2 text-gray-700 font-semibold mb-2">
+              <label htmlFor="days" className="flex items-center gap-2 text-gray-700 font-semibold mb-2">
                 <Calendar className="w-5 h-5 text-primary-600" />
                 Number of Days
               </label>
@@ -286,11 +285,8 @@ export default function TripCreation() {
 
           {/* Upgrade Prompt */}
           {showUpgradePrompt && (
-            <m.div
-              className="bg-orange-50 border-2 border-orange-300 rounded-xl p-6 mb-6"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.2 }}
+            <div
+              className="bg-orange-50 border-2 border-orange-300 rounded-xl p-6 mb-6 animate-fade-in-up"
             >
               <div className="flex items-start gap-4">
                 <AlertCircle className="w-6 h-6 text-orange-600 flex-shrink-0 mt-1" />
@@ -326,7 +322,7 @@ export default function TripCreation() {
                   <X className="w-5 h-5 text-gray-600" />
                 </button>
               </div>
-            </m.div>
+            </div>
           )}
 
           {/* Free Usage Counter */}

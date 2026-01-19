@@ -23,6 +23,18 @@ NEXT_PUBLIC_GEMINI_API_KEY=your_gemini_api_key_here
 - Go to [Google AI Studio](https://makersuite.google.com/app/apikey)
 - Create a new API key
 
+### 3. Google Cloud Platform Credentials (Optional - for API usage monitoring)
+```
+GOOGLE_CLOUD_PROJECT_ID=your-gcp-project-id
+GOOGLE_APPLICATION_CREDENTIALS_JSON={"type":"service_account",...}
+```
+
+**Where to get it:**
+- See [GCP Credentials Setup Guide](../setup/GCP_CREDENTIALS_SETUP.md) for detailed instructions
+- Create a service account with `roles/monitoring.viewer` role
+- Download the JSON key file
+- Convert JSON to single-line string format
+
 ## How to Add Environment Variables in Vercel
 
 ### Method 1: Via Vercel Dashboard (Recommended)
@@ -41,6 +53,18 @@ NEXT_PUBLIC_GEMINI_API_KEY=your_gemini_api_key_here
    **Add Gemini Key:**
    - **Key**: `NEXT_PUBLIC_GEMINI_API_KEY`
    - **Value**: Your Gemini API key
+   - **Environment**: Select all (Production, Preview, Development)
+   - Click **"Save"**
+
+   **Add GCP Project ID (Optional):**
+   - **Key**: `GOOGLE_CLOUD_PROJECT_ID`
+   - **Value**: Your GCP project ID (e.g., `my-project-123456`)
+   - **Environment**: Select all (Production, Preview, Development)
+   - Click **"Save"**
+
+   **Add GCP Service Account JSON (Optional):**
+   - **Key**: `GOOGLE_APPLICATION_CREDENTIALS_JSON`
+   - **Value**: Your entire service account JSON as a single-line string (see [GCP Credentials Setup](../setup/GCP_CREDENTIALS_SETUP.md))
    - **Environment**: Select all (Production, Preview, Development)
    - Click **"Save"**
 
@@ -78,6 +102,8 @@ vercel env pull .env.local
 - [ ] `NEXT_PUBLIC_GEMINI_API_KEY` added to Production
 - [ ] `NEXT_PUBLIC_GEMINI_API_KEY` added to Preview
 - [ ] `NEXT_PUBLIC_GEMINI_API_KEY` added to Development
+- [ ] `GOOGLE_CLOUD_PROJECT_ID` added (optional, for API usage monitoring)
+- [ ] `GOOGLE_APPLICATION_CREDENTIALS_JSON` added (optional, for API usage monitoring)
 - [ ] Project redeployed after adding variables
 
 ## Important Notes

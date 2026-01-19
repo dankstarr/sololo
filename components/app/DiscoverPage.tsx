@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { m } from 'framer-motion'
 import Image from 'next/image'
 import {
   Heart,
@@ -64,13 +63,9 @@ export default function DiscoverPage() {
         {/* Grid */}
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredItems.map((item) => (
-            <m.div
+            <div
               key={item.id}
-              className="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-all cursor-pointer group"
-              initial={{ opacity: 0, y: 10 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: '-50px' }}
-              transition={{ duration: 0.3 }}
+              className="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-all duration-200 cursor-pointer group animate-fade-in-up"
             >
               {/* Image */}
               <div className="aspect-video bg-gray-200 relative overflow-hidden">
@@ -129,7 +124,7 @@ export default function DiscoverPage() {
                   </button>
                 </div>
               </div>
-            </m.div>
+            </div>
           ))}
         </div>
       </div>

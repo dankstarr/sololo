@@ -1,6 +1,5 @@
 'use client'
 
-import { m } from 'framer-motion'
 import { AlertCircle, RefreshCw } from 'lucide-react'
 
 interface ErrorStateProps {

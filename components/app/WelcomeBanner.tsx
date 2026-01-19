@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { m } from 'framer-motion'
 import { MapPin, X, ArrowRight } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
@@ -33,12 +32,8 @@ export default function WelcomeBanner() {
   }
 
   return (
-    <m.div
-      initial={{ opacity: 0, y: -20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -20 }}
-      transition={{ duration: 0.3 }}
-      className="mb-6 bg-gradient-to-r from-primary-50 to-primary-100 border border-primary-200 rounded-xl p-4 sm:p-6 relative overflow-hidden"
+    <div
+      className="card-modern mb-6 bg-gradient-to-r from-primary-50 to-primary-100 border border-primary-200 rounded-xl p-4 sm:p-6 relative overflow-hidden scroll-slide-right"
     >
       {/* Background decoration */}
       <div className="absolute inset-0 opacity-10">
@@ -62,14 +57,14 @@ export default function WelcomeBanner() {
           <div className="flex flex-wrap gap-2">
             <button
               onClick={handleGoogleSignIn}
-              className="px-4 py-2 bg-primary-600 text-white rounded-lg font-semibold text-sm hover:bg-primary-700 transition-all hover:scale-105 active:scale-95 flex items-center gap-2"
+              className="px-4 py-2 bg-primary-600 text-white rounded-lg font-semibold text-sm hover:bg-primary-700 hover-lift hover-glow flex items-center gap-2"
             >
               Continue with Google
               <ArrowRight className="w-4 h-4" />
             </button>
             <button
               onClick={handleDismiss}
-              className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg font-semibold text-sm hover:bg-gray-50 transition-all"
+              className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg font-semibold text-sm hover:bg-gray-50 hover-lift"
             >
               Skip for now
             </button>
@@ -84,6 +79,6 @@ export default function WelcomeBanner() {
           <X className="w-5 h-5" />
         </button>
       </div>
-    </m.div>
+    </div>
   )
 }

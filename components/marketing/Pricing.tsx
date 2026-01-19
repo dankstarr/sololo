@@ -1,6 +1,5 @@
 'use client'
 
-import { m } from 'framer-motion'
 import { Check, Sparkles } from 'lucide-react'
 import Link from 'next/link'
 import appConfig from '@/config/app.config'
@@ -48,26 +47,21 @@ export default function Pricing() {
 
         <div className="grid sm:grid-cols-2 gap-6 sm:gap-8 max-w-4xl mx-auto">
           {plans.map((plan, index) => (
-            <m.div
+            <div
               key={index}
-              className={`relative bg-white rounded-2xl shadow-xl hover:shadow-2xl transition-all p-6 sm:p-8 border-2 z-10 ${
+              className={`card-modern tilt-card relative bg-white rounded-2xl shadow-xl p-6 sm:p-8 border-2 z-10 scroll-slide-left ${
                 plan.popular
                   ? 'border-primary-600 md:scale-105'
                   : 'border-gray-300'
               }`}
-              initial={{ opacity: 1, y: 0 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: '-50px' }}
-              transition={{ duration: 0.4, delay: index * 0.1 }}
               style={{ 
-                ...{ 
-                  backgroundColor: '#FFFFFF', 
-                  borderColor: plan.popular ? '#2D5A27' : '#D1D5DB',
-                  boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
-                  position: 'relative',
-                  zIndex: 10
-                },
-                opacity: 1 
+                animationDelay: `${index * 100}ms`,
+                animationFillMode: 'both',
+                backgroundColor: '#FFFFFF', 
+                borderColor: plan.popular ? '#2D5A27' : '#D1D5DB',
+                boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+                position: 'relative',
+                zIndex: 10
               }}
             >
               {plan.popular && (
@@ -98,15 +92,15 @@ export default function Pricing() {
 
               <Link
                 href={plan.ctaLink}
-                className={`block w-full text-center px-6 py-3 rounded-lg font-semibold transition-all hover:scale-105 active:scale-95 ${
+                className={`block w-full text-center px-6 py-3 rounded-lg font-semibold hover-lift ${
                   plan.popular
-                    ? 'bg-primary-600 text-white hover:bg-primary-700 shadow-lg'
+                    ? 'bg-primary-600 text-white hover:bg-primary-700 shadow-lg hover-glow'
                     : 'bg-gray-100 text-gray-900 hover:bg-gray-200'
                 }`}
               >
                 {plan.cta}
               </Link>
-            </m.div>
+            </div>
           ))}
         </div>
       </div>

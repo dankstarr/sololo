@@ -26,7 +26,12 @@ export default function SimpleMap({
 }: SimpleMapProps) {
   const mapRef = useRef<HTMLDivElement>(null)
   const [map, setMap] = useState<google.maps.Map | null>(null)
-  const [markers, setMarkers] = useState<google.maps.Marker[]>([])
+  const markersRef = useRef<
+    Array<{
+      remove: () => void
+      position: google.maps.LatLng | google.maps.LatLngLiteral
+    }>
+  >([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -49,10 +54,12 @@ export default function SimpleMap({
       if (!isMounted || !mapRef.current || !window.google?.maps?.Map) return
 
       try {
+        const hasMapId = Boolean(appConfig.googleMaps.mapId)
         const mapInstance = new window.google.maps.Map(mapRef.current, {
           center: appConfig.googleMaps.defaultCenter,
           zoom: appConfig.googleMaps.defaultZoom,
           mapTypeId: 'roadmap',
+          ...(hasMapId ? { mapId: appConfig.googleMaps.mapId } : {}),
         })
 
         if (isMounted) {
@@ -92,7 +99,9 @@ export default function SimpleMap({
 
     // Create and load script
     const script = document.createElement('script')
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${appConfig.googleMaps.apiKey}&libraries=places`
+    // Load Places + Advanced Marker libraries using the recommended loading=async pattern
+    // See: https://developers.google.com/maps/documentation/javascript/overview#async
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${appConfig.googleMaps.apiKey}&libraries=marker,places&loading=async`
     script.async = true
     script.defer = true
     
@@ -118,39 +127,139 @@ export default function SimpleMap({
   useEffect(() => {
     if (!map || !window.google) return
 
+    const hasMapId = Boolean(appConfig.googleMaps.mapId)
+    const useAdvancedMarkers =
+      hasMapId &&
+      !appConfig.googleMaps.useFallback &&
+      Boolean(window.google.maps.marker?.AdvancedMarkerElement)
+
+    const getCategoryColor = (category?: string) => {
+      const c = (category || 'default').toLowerCase()
+      if (c === 'you') return '#2563eb' // blue
+      if (c.includes('restaurant') || c.includes('food')) return '#dc2626' // red
+      if (c.includes('park') || c.includes('nature')) return '#16a34a' // green
+      if (c.includes('museum') || c.includes('art')) return '#7c3aed' // purple
+      if (c.includes('shopping') || c.includes('store')) return '#f59e0b' // amber
+      if (c.includes('landmark') || c.includes('tourist') || c.includes('attraction')) return '#0ea5e9' // sky
+      return '#6b7280' // gray
+    }
+
+    const makeMarkerIcon = (category?: string): google.maps.Icon => {
+      const fill = getCategoryColor(category)
+      const isYou = (category || '').toLowerCase() === 'you'
+
+      // A simple pin SVG (not a dot), with optional halo for "You"
+      const width = isYou ? 48 : 40
+      const height = isYou ? 48 : 40
+
+      const halo = isYou
+        ? `<circle cx="20" cy="16" r="14" fill="${fill}" fill-opacity="0.25" />`
+        : ''
+
+      const svg = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 40 40">
+          ${halo}
+          <path d="M20 38c6-9.2 12-15.4 12-22.2C32 9 26.6 4 20 4S8 9 8 15.8C8 22.6 14 28.8 20 38z"
+                fill="${fill}" stroke="#ffffff" stroke-width="2.8" />
+          <circle cx="20" cy="16" r="5.8" fill="#ffffff" fill-opacity="0.95" />
+        </svg>
+      `.trim()
+
+      const url = `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`
+
+      return {
+        url,
+        scaledSize: new window.google.maps.Size(width, height),
+        anchor: new window.google.maps.Point(width / 2, height),
+      }
+    }
+
     // Clear existing markers
-    markers.forEach(marker => marker.setMap(null))
-    const newMarkers: google.maps.Marker[] = []
+    markersRef.current.forEach((m) => m.remove())
+    const newMarkers: Array<{ remove: () => void; position: google.maps.LatLng | google.maps.LatLngLiteral }> = []
 
     if (locations.length > 0) {
       // Create markers
       locations.forEach((location) => {
         if (typeof location.lat === 'number' && typeof location.lng === 'number' && 
             !isNaN(location.lat) && !isNaN(location.lng)) {
-          const marker = new window.google.maps.Marker({
-            position: { lat: location.lat, lng: location.lng },
-            map: map,
-            title: location.name,
-          })
+          const category = location.category || 'default'
+          const pos = { lat: location.lat, lng: location.lng }
 
-          if (onLocationClick) {
-            marker.addListener('click', () => {
-              onLocationClick(location)
+          if (useAdvancedMarkers) {
+            // Use AdvancedMarkerElement with custom SVG pin content
+            const icon = makeMarkerIcon(category)
+            const width = icon.scaledSize?.width || 40
+            const height = icon.scaledSize?.height || 40
+            
+            const content = document.createElement('div')
+            content.style.width = `${width}px`
+            content.style.height = `${height}px`
+            content.style.position = 'absolute'
+            content.style.left = '0'
+            content.style.top = '0'
+            // Center horizontally and align bottom of pin to position
+            // AdvancedMarkerElement positions content's top-left at the lat/lng
+            // So we translate left by half width and up by full height
+            content.style.transform = `translate(${-width / 2}px, ${-height}px)`
+            content.style.transformOrigin = 'center bottom'
+            content.style.pointerEvents = 'auto'
+            content.style.cursor = 'pointer'
+            content.innerHTML = `<img src="${icon.url}" style="width:100%;height:100%;display:block;pointer-events:none;" alt="${location.name}" />`
+
+            const advancedMarker = new window.google.maps.marker.AdvancedMarkerElement({
+              map,
+              position: pos,
+              title: location.name,
+              content,
+              zIndex: category.toLowerCase() === 'you' ? 9999 : 1000,
+            })
+
+            if (onLocationClick) {
+              advancedMarker.addListener('gmp-click', () => {
+                onLocationClick(location)
+              })
+            }
+
+            newMarkers.push({
+              position: pos,
+              remove: () => {
+                advancedMarker.map = null
+              },
+            })
+          } else {
+            // Fallback to legacy Marker when there is no Map ID configured
+            const marker = new window.google.maps.Marker({
+              position: pos,
+              map,
+              title: location.name,
+              icon: makeMarkerIcon(category),
+              zIndex: category.toLowerCase() === 'you' ? 9999 : 1000,
+            })
+
+            if (onLocationClick) {
+              marker.addListener('click', () => {
+                onLocationClick(location)
+              })
+            }
+
+            newMarkers.push({
+              position: pos,
+              remove: () => {
+                marker.setMap(null)
+              },
             })
           }
-
-          newMarkers.push(marker)
         }
       })
 
-      setMarkers(newMarkers)
+      markersRef.current = newMarkers
 
       // Fit bounds to show all markers
       if (newMarkers.length > 0) {
         const bounds = new window.google.maps.LatLngBounds()
-        newMarkers.forEach(marker => {
-          const pos = marker.getPosition()
-          if (pos) bounds.extend(pos)
+        newMarkers.forEach((m) => {
+          bounds.extend(m.position)
         })
         
         if (bounds.getNorthEast().lat() !== bounds.getSouthWest().lat() ||
@@ -158,12 +267,8 @@ export default function SimpleMap({
           map.fitBounds(bounds)
         } else {
           // Single marker - center on it
-          const firstMarker = newMarkers[0]
-          const pos = firstMarker.getPosition()
-          if (pos) {
-            map.setCenter(pos)
-            map.setZoom(15)
-          }
+          map.setCenter(newMarkers[0].position)
+          map.setZoom(15)
         }
       }
     } else {

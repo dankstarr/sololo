@@ -1,6 +1,5 @@
 'use client'
 
-import { m } from 'framer-motion'
 import { X, Utensils, Landmark, Mountain } from 'lucide-react'
 
 interface Filter {
@@ -33,12 +32,8 @@ export default function FilterPanel({
   if (!isOpen) return null
 
   return (
-    <m.div
-      className="absolute top-20 left-4 bg-white rounded-lg shadow-xl p-4 z-20 min-w-[200px]"
-      initial={{ opacity: 0, y: -10 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -10 }}
-      transition={{ duration: 0.2 }}
+    <div
+      className="animate-fade-in-up absolute top-20 left-4 bg-white rounded-lg shadow-xl p-4 z-20 min-w-[200px]"
     >
       <div className="flex items-center justify-between mb-4">
         <h3 className="font-semibold text-gray-900">Filters</h3>
@@ -67,6 +62,6 @@ export default function FilterPanel({
           </label>
         ))}
       </div>
-    </m.div>
+    </div>
   )
 }

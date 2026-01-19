@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const response = await fetch(
-      `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=name,formatted_address,formatted_phone_number,website,opening_hours,rating,photos&key=${googleMaps.apiKey}`
+      `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=name,formatted_address,formatted_phone_number,website,opening_hours,rating,photos,editorial_summary,url,user_ratings_total,price_level,types&key=${googleMaps.apiKey}`
     )
 
     const data = await response.json()

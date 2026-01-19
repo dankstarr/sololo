@@ -8,20 +8,20 @@ describe('Header', () => {
     expect(screen.getByRole('banner')).toBeInTheDocument()
     expect(screen.getByRole('navigation', { name: /main navigation/i })).toBeInTheDocument()
     expect(screen.getByText('Sololo')).toBeInTheDocument()
-    expect(screen.getByText('How It Works')).toBeInTheDocument()
-    expect(screen.getByText('Features')).toBeInTheDocument()
     expect(screen.getByText('Discover')).toBeInTheDocument()
-    expect(screen.getByText('Pricing')).toBeInTheDocument()
+    expect(screen.getByText('Top Locations')).toBeInTheDocument()
+    expect(screen.getByText('Itinerary')).toBeInTheDocument()
+    expect(screen.getByText('Profile')).toBeInTheDocument()
   })
 
   it('has accessible links with proper labels', () => {
     render(<Header />)
     
+    const homeLink = screen.getByRole('link', { name: /sololo home/i })
+    expect(homeLink).toHaveAttribute('href', '/')
+
     const planTripLink = screen.getByRole('link', { name: /plan a trip/i })
     expect(planTripLink).toHaveAttribute('href', '/app')
-    
-    const howItWorksLink = screen.getByRole('link', { name: /navigate to how it works section/i })
-    expect(howItWorksLink).toBeInTheDocument()
   })
 
   it('has proper semantic HTML', () => {

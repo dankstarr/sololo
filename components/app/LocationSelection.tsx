@@ -2,12 +2,10 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { m, Reorder } from 'framer-motion'
 import Image from 'next/image'
 import {
   Check,
   X,
-  GripVertical,
   RefreshCw,
   Sparkles,
   ArrowRight,
@@ -29,11 +27,20 @@ interface LocationWithIncluded extends Location {
 
 export default function LocationSelection() {
   const router = useRouter()
-  const { currentTrip, setSelectedLocations, setItinerary } = useAppStore()
+  const { currentTrip, userProfile, setSelectedLocations, setItinerary, setCurrentTripId } = useAppStore()
   const [locations, setLocations] = useState<LocationWithIncluded[]>([])
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState<string | null>(null)
-  const reasoning = useAIReasoning()
+  const {
+    steps,
+    isOpen,
+    setIsOpen,
+    addStep,
+    startStep,
+    completeStep,
+    failStep,
+    reset,
+  } = useAIReasoning()
   
   // Get destination from trip or default
   const destination = currentTrip?.destination || 'Tokyo, Japan'
@@ -53,30 +60,30 @@ export default function LocationSelection() {
     if (!location) return
     
     setGenerating(id)
-    reasoning.reset()
+    reset()
     
     try {
       // Step 1: Analyze current location
-      const step1Id = reasoning.addStep({
+      const step1Id = addStep({
         id: `replace-${id}-1`,
         title: 'Analyzing current location',
         description: `Understanding ${location.name} and its characteristics`,
       })
-      reasoning.startStep(step1Id)
+      startStep(step1Id)
       
       await new Promise((resolve) => setTimeout(resolve, 500)) // Simulate processing
-      reasoning.completeStep(step1Id, `Analyzed ${location.name} with tags: ${location.tags?.join(', ') || 'none'}`)
+      completeStep(step1Id, `Analyzed ${location.name} with tags: ${location.tags?.join(', ') || 'none'}`)
       
       // Try Gemini API first
       const { gemini } = await import('@/config/gemini')
       if (gemini.enabled) {
         // Step 2: Generate alternative with AI
-        const step2Id = reasoning.addStep({
+        const step2Id = addStep({
           id: `replace-${id}-2`,
           title: 'Generating alternative location',
           description: 'Using AI to find similar locations',
         })
-        reasoning.startStep(step2Id)
+        startStep(step2Id)
         
         const altName = await generateAlternativeLocation(
           location.name,
@@ -84,20 +91,20 @@ export default function LocationSelection() {
           interests.length > 0 ? interests : location.tags || []
         )
         
-        reasoning.completeStep(step2Id, `AI suggested: ${altName}`)
+        completeStep(step2Id, `AI suggested: ${altName}`)
         
         // Step 3: Verify location exists
-        const step3Id = reasoning.addStep({
+        const step3Id = addStep({
           id: `replace-${id}-3`,
           title: 'Verifying location',
           description: 'Checking if location exists on Google Maps',
         })
-        reasoning.startStep(step3Id)
+        startStep(step3Id)
         
         const coords = await geocodeAddress(`${altName}, ${destination}`)
         
         if (coords) {
-          reasoning.completeStep(step3Id, `Location verified at coordinates: ${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}`)
+          completeStep(step3Id, `Location verified at coordinates: ${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}`)
           
           setLocations((prev) =>
             prev.map((loc) =>
@@ -111,7 +118,7 @@ export default function LocationSelection() {
             )
           )
         } else {
-          reasoning.failStep(step3Id, 'Location not found on Google Maps, using fallback')
+          failStep(step3Id, 'Location not found on Google Maps, using fallback')
           
           // Fallback to local generation
           const alternative = generateAlt({ name: location.name, tags: location.tags || [] })
@@ -129,15 +136,15 @@ export default function LocationSelection() {
         }
       } else {
         // Step 2: Fallback generation
-        const step2Id = reasoning.addStep({
+        const step2Id = addStep({
           id: `replace-${id}-2`,
           title: 'Using fallback generation',
           description: 'AI not available, using local alternatives',
         })
-        reasoning.startStep(step2Id)
+        startStep(step2Id)
         
         const alternative = generateAlt({ name: location.name, tags: location.tags || [] })
-        reasoning.completeStep(step2Id, `Generated alternative: ${alternative.name}`)
+        completeStep(step2Id, `Generated alternative: ${alternative.name}`)
         
         setLocations((prev) =>
           prev.map((loc) =>
@@ -154,12 +161,12 @@ export default function LocationSelection() {
     } catch (error) {
       console.error('Error generating alternative:', error)
       
-      const errorStepId = reasoning.addStep({
+      const errorStepId = addStep({
         id: `replace-${id}-error`,
         title: 'Error occurred',
         description: 'An error occurred during generation',
       })
-      reasoning.failStep(errorStepId, error instanceof Error ? error.message : 'Unknown error')
+      failStep(errorStepId, error instanceof Error ? error.message : 'Unknown error')
       
       // Fallback
       const alternative = generateAlt({ name: location.name, tags: location.tags || [] })
@@ -208,18 +215,18 @@ export default function LocationSelection() {
       if (!isMounted) return
       
       setLoading(true)
-      reasoning.reset()
-      reasoning.setIsOpen(true)
+      reset()
+      setIsOpen(true)
 
       try {
         // Step 1: Get destination coordinates
-        const step1Id = reasoning.addStep({
+        const step1Id = addStep({
           id: `get-coords-${sessionId}`,
           title: 'Getting destination coordinates',
           description: `Finding location for ${tripDestination}`,
         })
         if (!isMounted) return
-        reasoning.startStep(step1Id)
+        startStep(step1Id)
 
         const coords = await geocodeAddress(tripDestination)
         if (!isMounted) return
@@ -227,16 +234,16 @@ export default function LocationSelection() {
         if (!coords) {
           throw new Error(`Could not find coordinates for ${tripDestination}`)
         }
-        reasoning.completeStep(step1Id, `Found ${tripDestination} at ${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}`)
+        completeStep(step1Id, `Found ${tripDestination} at ${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}`)
 
         // Step 2: Generate location suggestions with AI
-        const step2Id = reasoning.addStep({
+        const step2Id = addStep({
           id: `generate-suggestions-${sessionId}`,
           title: 'Generating location suggestions',
           description: 'Using AI to suggest places to visit',
         })
         if (!isMounted) return
-        reasoning.startStep(step2Id)
+        startStep(step2Id)
 
         const { gemini } = await import('@/config/gemini')
         let locationNames: string[] = []
@@ -261,22 +268,22 @@ export default function LocationSelection() {
               })
             }
             
-            reasoning.completeStep(step2Id, `AI suggested ${locationNames.length} locations with explanations`)
+            completeStep(step2Id, `AI suggested ${locationNames.length} locations with explanations`)
           } catch (error) {
             console.error('Error generating suggestions:', error)
             if (!isMounted) return
-            reasoning.completeStep(step2Id, 'Using Google Places search instead')
+            completeStep(step2Id, 'Using Google Places search instead')
           }
         }
 
         // Step 3: Search for places using Google Maps
-        const step3Id = reasoning.addStep({
+        const step3Id = addStep({
           id: `search-places-${sessionId}`,
           title: 'Searching for places',
           description: 'Finding locations on Google Maps',
         })
         if (!isMounted) return
-        reasoning.startStep(step3Id)
+        startStep(step3Id)
 
         const targetLocationCount = 25 // Always aim for 20-25 locations
         let foundLocations: LocationWithIncluded[] = []
@@ -388,7 +395,7 @@ export default function LocationSelection() {
         
         console.log(`Successfully found ${foundLocations.length} locations for ${tripDestination}`)
 
-        reasoning.completeStep(step3Id, `Found ${foundLocations.length} locations`)
+        completeStep(step3Id, `Found ${foundLocations.length} locations`)
         
         // If we have locations from Google Places that don't have explanations yet, 
         // generate them in ONE batch API call (only if we have many without explanations)
@@ -399,13 +406,13 @@ export default function LocationSelection() {
           
           if (locationsWithoutExplanations.length > 5) {
             // Only generate if we have many locations without good explanations
-            const step4Id = reasoning.addStep({
+            const step4Id = addStep({
               id: `generate-explanations-${sessionId}`,
               title: 'Generating location explanations',
               description: 'Creating personalized descriptions',
             })
             if (!isMounted) return
-            reasoning.startStep(step4Id)
+            startStep(step4Id)
 
             try {
               const namesToExplain = locationsWithoutExplanations.map(loc => loc.name)
@@ -428,12 +435,12 @@ export default function LocationSelection() {
                     return explanation ? { ...loc, aiExplanation: explanation } : loc
                   })
                 )
-                reasoning.completeStep(step4Id, `Generated ${batchExplanations.length} personalized explanations`)
+                completeStep(step4Id, `Generated ${batchExplanations.length} personalized explanations`)
               }
             } catch (error) {
               console.error('Error generating batch explanations:', error)
               if (isMounted) {
-                reasoning.completeStep(step4Id, 'Explanations skipped due to rate limit')
+                completeStep(step4Id, 'Explanations skipped due to rate limit')
               }
             }
           }
@@ -452,12 +459,12 @@ export default function LocationSelection() {
         console.error('Current trip:', currentTrip)
         
         const sessionId = Date.now().toString(36)
-        const errorStepId = reasoning.addStep({
+        const errorStepId = addStep({
           id: `error-${sessionId}`,
           title: 'Error generating locations',
           description: 'An error occurred',
         })
-        reasoning.failStep(errorStepId, error instanceof Error ? error.message : 'Unknown error')
+        failStep(errorStepId, error instanceof Error ? error.message : 'Unknown error')
         
         // Don't use sample locations - they're Japan-specific
         // Show error message instead
@@ -474,7 +481,7 @@ export default function LocationSelection() {
     return () => {
       isMounted = false
     }
-  }, [currentTrip])
+  }, [currentTrip, router, reset, setIsOpen, addStep, startStep, completeStep, failStep])
 
   const handleConfirm = () => {
     const includedLocations = locations.filter((loc) => loc.included)
@@ -506,6 +513,27 @@ export default function LocationSelection() {
     }
     
     setItinerary(itineraryDays)
+    ;(async () => {
+      try {
+        if (!currentTrip) return
+        const res = await fetch('/api/trips', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: userProfile?.id,
+            trip: currentTrip,
+            locations: includedLocations,
+            itinerary: itineraryDays,
+          }),
+        })
+        if (!res.ok) throw new Error('Failed to persist trip')
+        const data = await res.json()
+        if (data?.id) setCurrentTripId(data.id)
+      } catch (e) {
+        console.warn('Trip persistence failed (non-blocking):', e)
+      }
+    })()
+
     router.push('/app/itinerary')
   }
 
@@ -513,12 +541,12 @@ export default function LocationSelection() {
     <div className="container mx-auto px-6 py-8">
       <div className="max-w-4xl mx-auto animate-in fade-in duration-300">
         {/* AI Reasoning Panel */}
-        {reasoning.steps.length > 0 && (
+        {steps.length > 0 && (
           <div className="mb-6">
             <AIReasoningPanel
-              steps={reasoning.steps}
-              isOpen={reasoning.isOpen}
-              onToggle={() => reasoning.setIsOpen(!reasoning.isOpen)}
+              steps={steps}
+              isOpen={isOpen}
+              onToggle={() => setIsOpen(!isOpen)}
               title="AI Generation Process"
               defaultExpanded={true}
             />
@@ -539,7 +567,7 @@ export default function LocationSelection() {
           <p className="text-gray-600">
             {loading 
               ? `Generating AI-suggested places for ${destination}...`
-              : `Review and customize the AI-suggested places for ${destination}. Drag to reorder, or replace with alternatives.`
+              : `Review and customize the AI-suggested places for ${destination}. Reorder is coming soon — you can still replace and toggle places.`
             }
           </p>
         </div>
@@ -564,16 +592,10 @@ export default function LocationSelection() {
         )}
 
         {!loading && locations.length > 0 && (
-          <Reorder.Group
-            axis="y"
-            values={locations}
-            onReorder={setLocations}
-            className="space-y-4 mb-8"
-          >
+          <div className="space-y-4 mb-8">
           {locations.map((location) => (
-            <Reorder.Item
+            <div
               key={location.id}
-              value={location}
               className="bg-white rounded-xl shadow-lg overflow-hidden"
             >
               <div className="flex gap-4 p-4 md:p-6 hover:scale-[1.01] transition-transform">
@@ -640,12 +662,10 @@ export default function LocationSelection() {
                     </div>
                   </div>
                 </div>
-
-                <GripVertical className="w-6 h-6 text-gray-400 cursor-grab active:cursor-grabbing flex-shrink-0" />
               </div>
-            </Reorder.Item>
+            </div>
           ))}
-          </Reorder.Group>
+          </div>
         )}
 
         {!loading && locations.length > 0 && (

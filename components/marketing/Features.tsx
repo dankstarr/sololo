@@ -1,6 +1,5 @@
 'use client'
 
-import { m } from 'framer-motion'
 import {
   Sparkles,
   Route,
@@ -55,23 +54,16 @@ export default function Features() {
           {features.map((feature, index) => {
             const Icon = feature.icon
             return (
-              <m.div
+              <div
                 key={index}
-                className="bg-white p-4 sm:p-6 rounded-xl shadow-lg hover:shadow-xl transition-all border-2 border-gray-200 group cursor-pointer relative z-10"
-                initial={{ opacity: 1, y: 0 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: '-50px' }}
-                transition={{
-                  duration: appConfig.animations.fadeIn / 1000,
-                  delay: index * (appConfig.animations.staggerDelay / 1000),
-                }}
+                className="card-modern tilt-card bg-white p-4 sm:p-6 rounded-xl shadow-lg border-2 border-gray-200 group cursor-pointer relative z-10 scroll-fade-in"
                 style={{ 
-                  ...{ backgroundColor: '#FFFFFF', borderColor: '#E5E7EB', position: 'relative', zIndex: 10 },
-                  opacity: 1 
-                }}
-                whileHover={{
-                  scale: appConfig.animations.hoverScale,
-                  transition: { duration: appConfig.animations.hoverDuration / 1000 },
+                  animationDelay: `${index * 100}ms`,
+                  animationFillMode: 'both',
+                  backgroundColor: '#FFFFFF',
+                  borderColor: '#E5E7EB',
+                  position: 'relative',
+                  zIndex: 10
                 }}
               >
                 <div className="w-12 h-12 bg-primary-100 rounded-lg flex items-center justify-center mb-4 group-hover:bg-primary-600 transition-colors">
@@ -83,7 +75,7 @@ export default function Features() {
                 <p className="text-gray-600 leading-relaxed text-sm sm:text-base" style={{ color: '#4B5563' }}>
                   {feature.description || 'No description available'}
                 </p>
-              </m.div>
+              </div>
             )
           })}
         </div>

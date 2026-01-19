@@ -1,6 +1,8 @@
 import type { Metadata } from 'next'
 import './globals.css'
 import SkipLink from '@/components/common/SkipLink'
+import ScrollAnimationInit from '@/components/common/ScrollAnimationInit'
+import SiteNav from '@/components/common/SiteNav'
 import { Analytics } from '@vercel/analytics/react'
 
 export const metadata: Metadata = {
@@ -54,6 +56,8 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className="font-sans antialiased">
         <SkipLink />
+        <ScrollAnimationInit />
+        <SiteNav />
         {children}
         <Analytics />
       </body>

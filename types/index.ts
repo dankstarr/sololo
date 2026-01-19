@@ -36,6 +36,7 @@ export interface Day {
 
 export interface Group {
   id: string
+  name?: string
   destination: string
   startDate: string
   endDate: string
@@ -65,4 +66,16 @@ export interface DiscoverItem {
   saves: number
   views: number
   image: string
+}
+
+export interface UserProfile {
+  id: string
+  name: string
+  email: string
+  avatarUrl?: string
+  bio?: string
+  homeBase?: string
+  joinedAt: string
+  tripsCreated: number
+  favoritesCount: number
 }

@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { m } from 'framer-motion'
 import { Search, Heart, Bookmark, Eye, Headphones, MapPin, Calendar, Clock, User, Star, ArrowRight, Grid3x3, List, Sparkles } from 'lucide-react'
 import { 
   Input, 
@@ -19,9 +18,9 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { useAppStore } from '@/store/useAppStore'
 import { useRouter } from 'next/navigation'
-import Header from '@/components/marketing/Header'
 import Footer from '@/components/marketing/Footer'
 import { useDebounce } from '@/hooks'
+import { trackedFetch } from '@/lib/utils/tracked-fetch'
 
 type FilterType = 'all' | 'itinerary' | 'audio-guide' | 'route'
 
@@ -60,9 +59,15 @@ export default function DiscoverPage() {
     toggleSavedItinerary, 
     toggleSavedAudioGuide, 
     toggleSavedRoute,
+    toggleLikedItinerary,
+    toggleLikedAudioGuide,
+    toggleLikedRoute,
     savedItineraries,
     savedAudioGuides,
     savedRoutes,
+    likedItineraries,
+    likedAudioGuides,
+    likedRoutes,
     setCurrentTrip,
     setSelectedLocations,
     setItinerary,
@@ -88,13 +93,13 @@ export default function DiscoverPage() {
     const fetchSharedItineraries = async () => {
       setLoadingShared(true)
       try {
-        const response = await fetch('/api/share/list')
+        const response = await trackedFetch('/api/share/list')
         if (response.ok) {
           const data = await response.json()
           // Convert shared itineraries to DiscoverItem format
           const converted = data.map((item: any) => ({
-            id: `shared-${item.id}`,
-            type: 'trip' as const,
+            id: String(item.id),
+            type: 'itinerary' as const,
             title: `${item.trip.destination} Itinerary`,
             destination: item.trip.destination,
             duration: `${item.trip.days} days`,
@@ -104,6 +109,7 @@ export default function DiscoverPage() {
             image: '/images/placeholder-location.jpg',
             shareId: item.id,
             isShared: true,
+            description: 'Shared itinerary from the community',
           }))
           setSharedItineraries(converted)
         }
@@ -151,7 +157,7 @@ export default function DiscoverPage() {
     }
 
     console.log('✅ Filtering items:', discoverItems.length, 'total items')
-    console.log('🔍 Filter state:', { activeFilter, searchQuery })
+    console.log('🔍 Filter state:', { activeFilter, debouncedSearchQuery })
 
     // Combine discover items with shared itineraries
     const allItems = [...discoverItems, ...sharedItineraries]
@@ -181,7 +187,7 @@ export default function DiscoverPage() {
     console.log('✅ Filtered items result:', sorted.length, 'items')
     console.log('📦 First 3 items:', sorted.slice(0, 3).map(i => i.title))
     return sorted
-  }, [debouncedSearchQuery, activeFilter, discoverItems])
+  }, [debouncedSearchQuery, activeFilter, sharedItineraries])
 
   // Format numbers
   const formatNumber = (num: number): string => {
@@ -216,12 +222,18 @@ export default function DiscoverPage() {
   }
 
   const ItemCard = ({ item }: { item: DiscoverItem }) => {
-    const [liked, setLiked] = useState(false)
     const isSaved = item.type === 'itinerary' 
       ? savedItineraries.includes(item.id)
       : item.type === 'audio-guide'
       ? savedAudioGuides.includes(item.id)
       : savedRoutes.includes(item.id)
+
+    const isLiked =
+      item.type === 'itinerary'
+        ? likedItineraries.includes(item.id)
+        : item.type === 'audio-guide'
+          ? likedAudioGuides.includes(item.id)
+          : likedRoutes.includes(item.id)
     
     const handleSave = (e: React.MouseEvent) => {
       e.stopPropagation()
@@ -231,6 +243,17 @@ export default function DiscoverPage() {
         toggleSavedAudioGuide(item.id)
       } else {
         toggleSavedRoute(item.id)
+      }
+    }
+
+    const handleLike = (e: React.MouseEvent) => {
+      e.stopPropagation()
+      if (item.type === 'itinerary') {
+        toggleLikedItinerary(item.id)
+      } else if (item.type === 'audio-guide') {
+        toggleLikedAudioGuide(item.id)
+      } else {
+        toggleLikedRoute(item.id)
       }
     }
     
@@ -255,15 +278,11 @@ export default function DiscoverPage() {
     }
 
     return (
-      <m.div
-        variants={itemVariants}
-        initial="visible"
-        animate="visible"
-        whileHover={{ scale: 1.02, transition: { type: 'spring', stiffness: 300, damping: 20 } }}
-        className="cursor-pointer"
+      <div
+        className="cursor-pointer scroll-fade-in"
         onClick={handleClick}
       >
-        <Card className="overflow-hidden hover:shadow-xl transition-all bg-white border border-gray-200 rounded-2xl">
+        <Card className="card-modern tilt-card overflow-hidden bg-white border border-gray-200 rounded-2xl">
           <div className="relative">
             {/* Image */}
             <div className="w-full h-48 bg-gray-200 overflow-hidden relative">
@@ -299,15 +318,12 @@ export default function DiscoverPage() {
               {/* Action Buttons */}
               <div className="absolute top-3 right-3 flex gap-2">
                 <button
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setLiked(!liked)
-                  }}
+                  onClick={handleLike}
                   className={`p-2 rounded-full backdrop-blur-md transition-all ${
-                    liked ? 'bg-red-500 text-white' : 'bg-white/90 text-gray-700'
+                    isLiked ? 'bg-red-500 text-white' : 'bg-white/90 text-gray-700'
                   }`}
                 >
-                  <Heart className={`w-4 h-4 ${liked ? 'fill-current' : ''}`} />
+                  <Heart className={`w-4 h-4 ${isLiked ? 'fill-current' : ''}`} />
                 </button>
                 <button
                   onClick={handleSave}
@@ -386,14 +402,13 @@ export default function DiscoverPage() {
             </div>
           </div>
         </Card>
-      </m.div>
+      </div>
     )
   }
 
   return (
     <main id="main-content" className="min-h-screen bg-background">
-      <Header />
-      <div className="min-h-screen bg-background pt-20">
+      <div className="min-h-screen bg-background">
         {/* Page Header */}
         <header className="sticky top-20 z-20 bg-white border-b border-gray-200 shadow-sm px-4 sm:px-6 py-5">
         <div className="container mx-auto">
@@ -515,20 +530,14 @@ export default function DiscoverPage() {
           <div className="w-full">
             {viewMode === 'featured' ? (
             // Featured View - Large hero card + smaller cards
-            <m.div
-              variants={containerVariants}
-              initial="visible"
-              animate="visible"
+            <div
               className="space-y-6 pb-6"
             >
               {filteredItems.length > 0 && (
                 <>
                   {/* Featured Hero Card */}
-                  <m.div
-                    variants={itemVariants}
-                    initial="visible"
-                    animate="visible"
-                    className="relative h-96 rounded-2xl overflow-hidden cursor-pointer group"
+                  <div
+                    className="relative h-96 rounded-2xl overflow-hidden cursor-pointer group animate-fade-in-up"
                     onClick={() => {
                       const featured = filteredItems[0]
                       if (featured.type === 'itinerary') {
@@ -570,7 +579,7 @@ export default function DiscoverPage() {
                         </div>
                       </div>
                     </div>
-                  </m.div>
+                  </div>
 
                   {/* Grid of remaining items */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
@@ -580,24 +589,18 @@ export default function DiscoverPage() {
                   </div>
                 </>
               )}
-            </m.div>
+            </div>
           ) : viewMode === 'list' ? (
             // List View - Horizontal cards
-            <m.div
-              variants={containerVariants}
-              initial="visible"
-              animate="visible"
+            <div
               className="space-y-4 pb-6"
             >
               {filteredItems.length > 0 ? (
-                filteredItems.map((item) => (
-                  <m.div
+                filteredItems.map((item, idx) => (
+                  <div
                     key={item.id}
-                    variants={itemVariants}
-                    initial="visible"
-                    animate="visible"
-                    whileHover={{ scale: 1.01, transition: { type: 'spring', stiffness: 300, damping: 20 } }}
-                    className="cursor-pointer"
+                    className="cursor-pointer scroll-slide-right"
+                    style={{ animationDelay: `${idx * 50}ms` }}
                     onClick={() => {
                       if (item.type === 'itinerary') {
                         router.push('/app/itinerary')
@@ -608,7 +611,7 @@ export default function DiscoverPage() {
                       }
                     }}
                   >
-                    <Card className="overflow-hidden hover:shadow-xl transition-all rounded-2xl">
+                    <Card className="card-modern overflow-hidden rounded-2xl">
                       <div className="flex gap-4 p-5">
                         {/* Image */}
                         <div className="w-32 h-32 rounded-xl bg-secondary flex-shrink-0 overflow-hidden relative">
@@ -685,7 +688,7 @@ export default function DiscoverPage() {
                         </div>
                       </div>
                     </Card>
-                  </m.div>
+                  </div>
                 ))
               ) : (
                 <div className="text-center py-12">
@@ -694,13 +697,10 @@ export default function DiscoverPage() {
                   <p className="text-gray-500 text-sm">Try a different search or filter.</p>
                 </div>
               )}
-            </m.div>
+            </div>
           ) : (
             // Grid View - Default
-            <m.div
-              variants={containerVariants}
-              initial="visible"
-              animate="visible"
+            <div
               className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 pb-6"
             >
               {filteredItems.length > 0 ? (
@@ -714,7 +714,7 @@ export default function DiscoverPage() {
                   <p className="text-gray-500 text-sm">Try a different search or filter.</p>
                 </div>
               )}
-            </m.div>
+            </div>
           )}
           </div>
         ) : (
@@ -731,7 +731,7 @@ export default function DiscoverPage() {
                 setActiveFilter('all')
                 setSearchQuery('')
               }}
-              className="px-6 py-3 bg-primary text-white rounded-lg font-semibold hover:bg-primary-600 transition-colors shadow-md"
+              className="px-6 py-3 bg-primary text-white rounded-lg font-semibold hover:bg-primary-600 hover-lift hover-glow shadow-md"
             >
               Show All Items
             </button>

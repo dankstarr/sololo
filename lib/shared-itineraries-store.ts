@@ -12,9 +12,27 @@ interface SharedItinerary {
 
 const sharedItineraries = new Map<string, SharedItinerary>()
 
-// Generate a unique ID
+// Generate a short, unique ID suitable for use in URLs
 export function generateShareId(): string {
-  return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)
+  // Try a few times to avoid collisions in the in-memory map
+  for (let i = 0; i < 5; i++) {
+    // Use current time + random to build a compact base36 token (7–9 chars)
+    const timePart = Date.now().toString(36).slice(-4)
+    const randomPart = Math.random().toString(36).slice(2, 6)
+    const id = (timePart + randomPart).toLowerCase()
+
+    if (!sharedItineraries.has(id)) {
+      return id
+    }
+  }
+
+  // Fallback: slightly longer ID if many collisions (very unlikely)
+  let fallbackId: string
+  do {
+    fallbackId = Math.random().toString(36).slice(2, 10).toLowerCase()
+  } while (sharedItineraries.has(fallbackId))
+
+  return fallbackId
 }
 
 // Store a shared itinerary
