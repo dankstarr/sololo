@@ -359,7 +359,7 @@ export default function AdminPanel() {
                           <ul className="list-disc list-inside space-y-1 text-blue-700">
                             <li><strong>Local tracking</strong> (above) updates immediately when APIs are called</li>
                             <li><strong>GCP metrics</strong> (here) have a 5-15 minute delay and appear after actual API usage</li>
-                            <li>If you see zeros, either: APIs haven't been used yet, or metrics are still propagating</li>
+                            <li>If you see zeros, either: APIs haven&apos;t been used yet, or metrics are still propagating</li>
                             <li>Compare with local stats above to verify APIs are working</li>
                           </ul>
                         </div>
