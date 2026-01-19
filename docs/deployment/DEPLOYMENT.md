@@ -141,7 +141,7 @@ Vercel provides:
 ### Performance Issues
 
 1. Check Vercel Analytics for bottlenecks
-2. Review [PERFORMANCE.md](./PERFORMANCE.md)
+2. Review [Performance Guide](../guides/PERFORMANCE.md)
 3. Enable Vercel Speed Insights
 
 ## 📝 Next Steps After Deployment

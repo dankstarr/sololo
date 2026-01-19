@@ -13,9 +13,14 @@ import {
   Settings,
   Music,
   X,
+  ArrowLeft,
 } from 'lucide-react'
 
-export default function AudioGuide() {
+interface AudioGuideProps {
+  onClose?: () => void
+}
+
+export default function AudioGuide({ onClose }: AudioGuideProps = {}) {
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration] = useState(180) // 3 minutes in seconds
@@ -146,6 +151,15 @@ export default function AudioGuide() {
 
       {/* Walk Mode UI - Minimal, Audio-First */}
       <div className="max-w-md w-full px-6 text-center relative">
+        {onClose && (
+          <button
+            onClick={onClose}
+            className="absolute top-4 left-4 p-2 text-white/80 hover:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-white/50 rounded-full"
+            aria-label="Close audio guide"
+          >
+            <ArrowLeft className="w-6 h-6" />
+          </button>
+        )}
         <div className="mb-8">
           <h2 className="text-2xl font-bold text-white mb-2">
             Senso-ji Temple

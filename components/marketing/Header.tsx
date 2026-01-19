@@ -3,12 +3,14 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { m } from 'framer-motion'
-import { MapPin } from 'lucide-react'
+import { MapPin, Calendar, Navigation } from 'lucide-react'
 
 export default function Header() {
   const [scrolled, setScrolled] = useState(false)
 
   useEffect(() => {
+    if (typeof window === 'undefined') return
+    
     const handleScroll = () => {
       setScrolled(window.scrollY > 20)
     }
@@ -22,11 +24,19 @@ export default function Header() {
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
         scrolled
           ? 'bg-white/95 backdrop-blur-md shadow-sm py-3'
-          : 'bg-transparent py-6'
+          : 'bg-white/90 backdrop-blur-sm py-6'
       }`}
-      initial={{ y: -100 }}
-      animate={{ y: 0 }}
+      initial={{ y: 0, opacity: 1 }}
+      animate={{ y: 0, opacity: 1 }}
       transition={{ duration: 0.3 }}
+      style={{ 
+        backgroundColor: scrolled ? 'rgba(255, 255, 255, 0.95)' : 'rgba(255, 255, 255, 0.9)',
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        zIndex: 50
+      }}
       role="banner"
     >
       <nav className="container mx-auto px-4 sm:px-6 flex items-center justify-between" aria-label="Main navigation">
@@ -39,9 +49,12 @@ export default function Header() {
           <a
             href="#how-it-works"
             className="text-gray-700 hover:text-primary-600 transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-primary-600 focus:ring-offset-2 rounded px-2 py-1"
+            style={{ color: '#374151' }}
             onClick={(e) => {
               e.preventDefault()
-              document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' })
+              if (typeof document !== 'undefined') {
+                document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' })
+              }
             }}
             aria-label="Navigate to How It Works section"
           >
@@ -50,9 +63,12 @@ export default function Header() {
           <a
             href="#features"
             className="text-gray-700 hover:text-primary-600 transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-primary-600 focus:ring-offset-2 rounded px-2 py-1"
+            style={{ color: '#374151' }}
             onClick={(e) => {
               e.preventDefault()
-              document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })
+              if (typeof document !== 'undefined') {
+                document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })
+              }
             }}
             aria-label="Navigate to Features section"
           >
@@ -61,15 +77,35 @@ export default function Header() {
           <Link
             href="/discover"
             className="text-gray-700 hover:text-primary-600 transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-primary-600 focus:ring-offset-2 rounded px-2 py-1"
+            style={{ color: '#374151' }}
           >
             Discover
+          </Link>
+          <Link
+            href="/discover/locations"
+            className="text-gray-700 hover:text-primary-600 transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-primary-600 focus:ring-offset-2 rounded px-2 py-1 flex items-center gap-1"
+            style={{ color: '#374151' }}
+          >
+            <Navigation className="w-4 h-4" />
+            Top Locations
+          </Link>
+          <Link
+            href="/app/itinerary"
+            className="text-gray-700 hover:text-primary-600 transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-primary-600 focus:ring-offset-2 rounded px-2 py-1 flex items-center gap-1"
+            style={{ color: '#374151' }}
+          >
+            <Calendar className="w-4 h-4" />
+            Itinerary
           </Link>
           <a
             href="#pricing"
             className="text-gray-700 hover:text-primary-600 transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-primary-600 focus:ring-offset-2 rounded px-2 py-1"
+            style={{ color: '#374151' }}
             onClick={(e) => {
               e.preventDefault()
-              document.getElementById('pricing')?.scrollIntoView({ behavior: 'smooth' })
+              if (typeof document !== 'undefined') {
+                document.getElementById('pricing')?.scrollIntoView({ behavior: 'smooth' })
+              }
             }}
             aria-label="Navigate to Pricing section"
           >

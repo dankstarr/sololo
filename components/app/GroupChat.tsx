@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useParams } from 'next/navigation'
 import { m } from 'framer-motion'
 import {
   Send,
@@ -16,6 +16,7 @@ import {
   Navigation,
   ArrowLeft,
 } from 'lucide-react'
+import { useAppStore } from '@/store/useAppStore'
 
 interface Message {
   id: string
@@ -29,6 +30,8 @@ interface Message {
 
 export default function GroupChat() {
   const router = useRouter()
+  const params = useParams()
+  const { currentGroup } = useAppStore()
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
@@ -86,6 +89,16 @@ export default function GroupChat() {
     setNewMessage('')
   }
 
+  const group = currentGroup || {
+    id: params?.id as string || 'default',
+    destination: 'Tokyo, Japan',
+    startDate: new Date().toISOString().split('T')[0],
+    endDate: new Date().toISOString().split('T')[0],
+    memberCount: 5,
+    maxMembers: 10,
+    description: 'Group exploring Tokyo',
+  }
+
   return (
     <div className="h-screen flex flex-col bg-gray-50">
       {/* Header */}
@@ -99,20 +112,20 @@ export default function GroupChat() {
             Back to Groups
           </button>
           <h1 className="text-2xl font-bold text-gray-900 mb-2">
-            Tokyo Adventure Group
+            {group.destination} Group
           </h1>
           <div className="flex items-center gap-4 text-sm text-gray-600">
             <div className="flex items-center gap-1">
               <MapPin className="w-4 h-4" />
-              <span>Tokyo, Japan</span>
+              <span>{group.destination}</span>
             </div>
             <div className="flex items-center gap-1">
               <Calendar className="w-4 h-4" />
-              <span>Mar 15-20, 2024</span>
+              <span>{group.startDate} - {group.endDate}</span>
             </div>
             <div className="flex items-center gap-1">
               <Users className="w-4 h-4" />
-              <span>3 members</span>
+              <span>{group.memberCount}/{group.maxMembers} members</span>
             </div>
           </div>
         </div>

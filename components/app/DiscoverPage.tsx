@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { m } from 'framer-motion'
+import Image from 'next/image'
 import {
   Heart,
   Bookmark,
@@ -12,6 +13,8 @@ import {
   Route,
   Filter,
 } from 'lucide-react'
+import { sampleDiscoverItems } from '@/config/sample-data'
+import { getImageUrl } from '@/lib/utils'
 
 interface DiscoverItem {
   id: string
@@ -30,52 +33,10 @@ export default function DiscoverPage() {
     'all'
   )
 
-  const items: DiscoverItem[] = [
-    {
-      id: '1',
-      type: 'trip',
-      title: 'Tokyo 5-Day Cultural Journey',
-      destination: 'Tokyo, Japan',
-      duration: '5 days',
-      likes: 124,
-      saves: 89,
-      views: 1200,
-      image: '/placeholder-tokyo.jpg',
-    },
-    {
-      id: '2',
-      type: 'guide',
-      title: 'Senso-ji Temple Audio Guide',
-      destination: 'Tokyo, Japan',
-      duration: '15 min',
-      likes: 67,
-      saves: 45,
-      views: 890,
-      image: '/placeholder-temple.jpg',
-    },
-    {
-      id: '3',
-      type: 'route',
-      title: 'Kyoto Temple Circuit',
-      destination: 'Kyoto, Japan',
-      duration: '6 hours',
-      likes: 203,
-      saves: 156,
-      views: 2100,
-      image: '/placeholder-kyoto.jpg',
-    },
-    {
-      id: '4',
-      type: 'trip',
-      title: 'Paris Art & History Tour',
-      destination: 'Paris, France',
-      duration: '4 days',
-      likes: 189,
-      saves: 134,
-      views: 1500,
-      image: '/placeholder-paris.jpg',
-    },
-  ]
+  const items: DiscoverItem[] = sampleDiscoverItems.map((item) => ({
+    ...item,
+    image: getImageUrl(item.image, 'discover'),
+  }))
 
   const filteredItems =
     filter === 'all'
@@ -121,9 +82,15 @@ export default function DiscoverPage() {
               viewport={{ once: true, margin: '-50px' }}
               transition={{ duration: 0.3 }}
             >
-              {/* Image Placeholder */}
-              <div className="aspect-video bg-gray-200 flex items-center justify-center relative">
-                <span className="text-gray-400 text-sm">Image</span>
+              {/* Image */}
+              <div className="aspect-video bg-gray-200 relative overflow-hidden">
+                <Image
+                  src={getImageUrl(item.image, 'discover')}
+                  alt={item.title}
+                  fill
+                  className="object-cover"
+                  sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                />
                 <div className="absolute top-3 right-3">
                   {item.type === 'guide' && (
                     <div className="bg-primary-600 text-white px-2 py-1 rounded-full text-xs font-semibold flex items-center gap-1">

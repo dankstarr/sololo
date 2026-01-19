@@ -2,24 +2,26 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { m } from 'framer-motion'
 import {
   Map,
   Filter,
   ExternalLink,
   List,
-  X,
-  Utensils,
-  Landmark,
-  Mountain,
   Download,
-  Wifi,
-  WifiOff,
   ArrowLeft,
 } from 'lucide-react'
+import LocationDetail from './LocationDetail'
+import { SimpleMap } from '@/components/maps'
+import { FilterPanel, DaySelector, OfflineIndicator } from '@/components/common'
+import { Button } from '@/components/ui'
+import { openInGoogleMaps, createGoogleMapsList } from '@/lib/utils'
+import { googleMaps } from '@/config/google-maps'
+import { useOffline } from '@/hooks'
+import { useAppStore } from '@/store/useAppStore'
 
 export default function MapView() {
   const router = useRouter()
+  const { itinerary, selectedLocations, currentTrip } = useAppStore()
   const [selectedDay, setSelectedDay] = useState<number | null>(1)
   const [filters, setFilters] = useState({
     food: true,
@@ -27,31 +29,51 @@ export default function MapView() {
     scenic: true,
   })
   const [showFilters, setShowFilters] = useState(false)
-  const [isOffline, setIsOffline] = useState(false)
+  const isOffline = useOffline()
   const [downloaded, setDownloaded] = useState(false)
+  const [selectedLocation, setSelectedLocation] = useState<{
+    name: string
+    category: string
+  } | null>(null)
 
-  const days = [
-    {
-      id: 1,
-      name: 'Day 1',
-      color: 'bg-blue-500',
-      locations: [
-        { name: 'Senso-ji Temple', category: 'culture', lat: 35.7148, lng: 139.7967 },
-        { name: 'Tsukiji Market', category: 'food', lat: 35.6654, lng: 139.7706 },
-        { name: 'Tokyo Skytree', category: 'scenic', lat: 35.7101, lng: 139.8107 },
-      ],
-    },
-    {
-      id: 2,
-      name: 'Day 2',
-      color: 'bg-green-500',
-      locations: [
-        { name: 'Shibuya Crossing', category: 'culture', lat: 35.6598, lng: 139.7006 },
-        { name: 'Meiji Shrine', category: 'culture', lat: 35.6764, lng: 139.6993 },
-        { name: 'Harajuku', category: 'culture', lat: 35.6702, lng: 139.7026 },
-      ],
-    },
-  ]
+  // Convert itinerary days to map format
+  const days = itinerary.length > 0 
+    ? itinerary.map((day, index) => ({
+        id: day.day,
+        name: `Day ${day.day}`,
+        color: index % 2 === 0 ? 'bg-blue-500' : 'bg-green-500',
+        locations: day.locations.map(locName => {
+          const location = selectedLocations.find(l => l.name === locName)
+          return {
+            name: locName,
+            category: location?.category || 'culture',
+            lat: location?.lat || 35.6762,
+            lng: location?.lng || 139.6503,
+          }
+        }),
+      }))
+    : [
+        {
+          id: 1,
+          name: 'Day 1',
+          color: 'bg-blue-500',
+          locations: [
+            { name: 'Senso-ji Temple', category: 'culture', lat: 35.7148, lng: 139.7967 },
+            { name: 'Tsukiji Market', category: 'food', lat: 35.6654, lng: 139.7706 },
+            { name: 'Tokyo Skytree', category: 'scenic', lat: 35.7101, lng: 139.8107 },
+          ],
+        },
+        {
+          id: 2,
+          name: 'Day 2',
+          color: 'bg-green-500',
+          locations: [
+            { name: 'Shibuya Crossing', category: 'culture', lat: 35.6598, lng: 139.7006 },
+            { name: 'Meiji Shrine', category: 'culture', lat: 35.6764, lng: 139.6993 },
+            { name: 'Harajuku', category: 'culture', lat: 35.6702, lng: 139.7026 },
+          ],
+        },
+      ]
 
   return (
     <div className="relative h-screen w-full">
@@ -67,134 +89,124 @@ export default function MapView() {
         </button>
       </div>
 
-      {/* Map Placeholder */}
-      <div className="absolute inset-0 bg-gradient-to-br from-blue-100 via-green-100 to-blue-100 flex items-center justify-center">
-        <div className="text-center">
-          <Map className="w-24 h-24 text-gray-400 mx-auto mb-4" />
-          <p className="text-gray-600 text-lg">
-            Google Maps integration would appear here
-          </p>
-          <p className="text-gray-500 text-sm mt-2">
-            Showing circular routes with animated drawing
-          </p>
+      {/* Google Map */}
+      {googleMaps.enabled && googleMaps.apiKey ? (
+        <div className="absolute inset-0" style={{ width: '100%', height: '100%' }}>
+          {/* SimpleMap - easiest and most foolproof map component */}
+          <SimpleMap
+            locations={
+              selectedDay
+                ? days.find((d) => d.id === selectedDay)?.locations || []
+                : days[0]?.locations || []
+            }
+            selectedDay={selectedDay || 1}
+            onLocationClick={(location) =>
+              setSelectedLocation({
+                name: location.name,
+                category: location.category || 'culture',
+              })
+            }
+            showRoute={false}
+            routeColor={googleMaps.routeColor}
+          />
         </div>
-      </div>
+      ) : (
+        <div className="absolute inset-0 bg-gradient-to-br from-blue-100 via-green-100 to-blue-100">
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="text-center">
+              <Map className="w-24 h-24 text-gray-400 mx-auto mb-4" />
+              <p className="text-gray-600 text-lg">
+                Google Maps integration would appear here
+              </p>
+              <p className="text-gray-500 text-sm mt-2">
+                Configure Google Maps API key in .env.local
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Controls Overlay */}
       <div className="absolute top-4 left-4 right-4 z-10 flex flex-wrap gap-4">
         {/* Offline Status */}
-        <div className="bg-white rounded-lg shadow-lg px-3 md:px-4 py-2 flex items-center gap-2">
-          {isOffline ? (
-            <>
-              <WifiOff className="w-4 h-4 text-orange-600" />
-              <span className="text-xs md:text-sm text-gray-700">Offline</span>
-            </>
-          ) : (
-            <>
-              <Wifi className="w-4 h-4 text-green-600" />
-              <span className="text-xs md:text-sm text-gray-700">Online</span>
-            </>
-          )}
-        </div>
+        <OfflineIndicator />
 
         {/* Day Selector */}
-        <div className="bg-white rounded-lg shadow-lg p-2 flex gap-2">
-            {days.map((day) => (
-              <button
-                key={day.id}
-                onClick={() => setSelectedDay(day.id)}
-                className={`px-3 md:px-4 py-2 rounded-lg font-medium transition-all text-sm md:text-base ${
-                  selectedDay === day.id
-                    ? 'bg-primary-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                {day.name}
-              </button>
-            ))}
-        </div>
+        <DaySelector
+          days={days.map(d => ({ id: d.id, name: d.name }))}
+          selectedDay={selectedDay}
+          onDaySelect={setSelectedDay}
+        />
 
         {/* Filter Button */}
-        <button
+        <Button
           onClick={() => setShowFilters(!showFilters)}
-          className="bg-white rounded-lg shadow-lg p-3 hover:bg-gray-50 transition-all"
-        >
-          <Filter className="w-5 h-5 text-gray-700" />
-        </button>
+          variant="secondary"
+          size="medium"
+          icon={<Filter className="w-5 h-5" />}
+          className="min-w-[44px]"
+        />
       </div>
 
-        {/* Filters Panel */}
-        {showFilters && (
-          <m.div
-            className="absolute top-20 left-4 bg-white rounded-lg shadow-xl p-4 z-20 min-w-[200px]"
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.2 }}
-          >
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-gray-900">Filters</h3>
-            <button
-              onClick={() => setShowFilters(false)}
-              className="text-gray-400 hover:text-gray-600"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-          <div className="space-y-2">
-            {[
-              { key: 'food', label: 'Food', icon: Utensils },
-              { key: 'culture', label: 'Culture', icon: Landmark },
-              { key: 'scenic', label: 'Scenic', icon: Mountain },
-            ].map(({ key, label, icon: Icon }) => (
-              <label
-                key={key}
-                className="flex items-center gap-2 cursor-pointer"
-              >
-                <input
-                  type="checkbox"
-                  checked={filters[key as keyof typeof filters]}
-                  onChange={(e) =>
-                    setFilters({ ...filters, [key]: e.target.checked })
-                  }
-                  className="w-4 h-4 text-primary-600 rounded focus:ring-primary-600"
-                />
-                <Icon className="w-4 h-4 text-gray-600" />
-                <span className="text-gray-700">{label}</span>
-              </label>
-            ))}
-          </div>
-        </m.div>
-      )}
+      {/* Filters Panel */}
+      <FilterPanel
+        isOpen={showFilters}
+        onClose={() => setShowFilters(false)}
+        filters={filters}
+        onFilterChange={(key, value) => setFilters({ ...filters, [key]: value })}
+      />
 
       {/* Bottom Actions */}
       <div className="absolute bottom-4 left-4 right-4 z-10">
         <div className="bg-white rounded-lg shadow-xl p-3 md:p-4 space-y-3">
           <div className="flex flex-col sm:flex-row gap-3">
-            <button className="flex-1 px-3 md:px-4 py-2 md:py-3 bg-primary-600 text-white rounded-lg font-semibold hover:bg-primary-700 transition-all flex items-center justify-center gap-2 text-sm md:text-base">
-              <ExternalLink className="w-4 h-4 md:w-5 md:h-5" />
+            <Button
+              onClick={() => {
+                const currentDay = days.find((d) => d.id === selectedDay)
+                if (currentDay && currentDay.locations.length > 0) {
+                  const firstLocation = currentDay.locations[0]
+                  openInGoogleMaps({
+                    name: firstLocation.name,
+                    lat: firstLocation.lat,
+                    lng: firstLocation.lng,
+                  })
+                } else {
+                  openInGoogleMaps({ name: 'Tokyo, Japan' })
+                }
+              }}
+              fullWidth
+              icon={<ExternalLink className="w-4 h-4 md:w-5 md:h-5" />}
+            >
               <span className="hidden sm:inline">Open in Google Maps</span>
               <span className="sm:hidden">Google Maps</span>
-            </button>
-            <button className="flex-1 px-3 md:px-4 py-2 md:py-3 bg-white text-primary-600 border-2 border-primary-600 rounded-lg font-semibold hover:bg-primary-50 transition-all flex items-center justify-center gap-2 text-sm md:text-base">
-              <List className="w-4 h-4 md:w-5 md:h-5" />
+            </Button>
+            <Button
+              onClick={() => {
+                const currentDay = days.find((d) => d.id === selectedDay)
+                if (currentDay) {
+                  createGoogleMapsList(currentDay.locations)
+                }
+              }}
+              variant="outline"
+              fullWidth
+              icon={<List className="w-4 h-4 md:w-5 md:h-5" />}
+            >
               <span className="hidden sm:inline">Create Google Maps List</span>
               <span className="sm:hidden">Create List</span>
-            </button>
+            </Button>
           </div>
-          <button
+          <Button
             onClick={() => {
               setDownloaded(true)
               alert('Downloading routes, maps, and audio guides for offline use...')
             }}
-            className={`w-full px-3 md:px-4 py-2 md:py-3 rounded-lg font-semibold transition-all flex items-center justify-center gap-2 text-sm md:text-base ${
-              downloaded
-                ? 'bg-green-100 text-green-700 border-2 border-green-300'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
+            variant={downloaded ? 'secondary' : 'secondary'}
+            fullWidth
+            icon={<Download className="w-4 h-4 md:w-5 md:h-5" />}
+            className={downloaded ? 'bg-green-100 text-green-700 border-2 border-green-300' : ''}
           >
-            <Download className="w-4 h-4 md:w-5 md:h-5" />
             {downloaded ? 'Downloaded for Offline' : 'Download for Offline'}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -216,6 +228,22 @@ export default function MapView() {
           </div>
         </div>
       </div>
+
+      {/* Location Detail Modal */}
+      {selectedLocation && (
+        <LocationDetail
+          location={{
+            name: selectedLocation.name,
+            description: `Explore ${selectedLocation.name}, a ${selectedLocation.category} destination with rich history and culture.`,
+            openingHours: '9:00 AM - 6:00 PM',
+            address: 'Tokyo, Japan',
+            crowdEstimate: 'Moderate',
+            safetyNotes: 'Generally safe area. Watch for pickpockets in crowded areas.',
+            photos: [],
+          }}
+          onClose={() => setSelectedLocation(null)}
+        />
+      )}
     </div>
   )
 }

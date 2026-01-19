@@ -1,8 +1,8 @@
 'use client'
 
-import { m } from 'framer-motion'
+import { useState } from 'react'
+import Image from 'next/image'
 import {
-  X,
   Clock,
   MapPin,
   Users,
@@ -12,17 +12,13 @@ import {
   Share2,
   Edit,
 } from 'lucide-react'
+import AudioGuide from './AudioGuide'
+import { Modal, Button } from '@/components/ui'
+import { shareLocation, getPlaceholderImage } from '@/lib/utils'
+import { LocationDetail as LocationDetailType } from '@/types'
 
 interface LocationDetailProps {
-  location: {
-    name: string
-    description: string
-    openingHours: string
-    address: string
-    crowdEstimate: string
-    safetyNotes: string
-    photos: string[]
-  }
+  location: LocationDetailType
   onClose: () => void
 }
 
@@ -30,39 +26,23 @@ export default function LocationDetail({
   location,
   onClose,
 }: LocationDetailProps) {
-  return (
-    <m.div
-      className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      onClick={onClose}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="location-detail-title"
-      transition={{ duration: 0.2 }}
-    >
-      <m.div
-        className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto m-4"
-        initial={{ scale: 0.95, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        onClick={(e) => e.stopPropagation()}
-        role="document"
-        transition={{ duration: 0.2 }}
-      >
-        {/* Header */}
-        <div className="sticky top-0 bg-white border-b border-gray-200 p-4 sm:p-6 flex items-center justify-between z-10">
-          <h2 id="location-detail-title" className="text-xl sm:text-2xl font-bold text-gray-900 pr-2">{location.name}</h2>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-primary-600 focus:ring-offset-2"
-            aria-label="Close location details"
-          >
-            <X className="w-5 h-5 text-gray-600" aria-hidden="true" />
-          </button>
-        </div>
+  const [showAudioGuide, setShowAudioGuide] = useState(false)
+  const [isBookmarked, setIsBookmarked] = useState(false)
+  const [note, setNote] = useState('')
 
-        {/* Content */}
-        <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
+  if (showAudioGuide) {
+    return <AudioGuide onClose={() => setShowAudioGuide(false)} />
+  }
+
+  return (
+    <Modal
+      isOpen={true}
+      onClose={onClose}
+      title={location.name}
+      size="medium"
+    >
+
+      <div className="space-y-4 sm:space-y-6">
           {/* Photos Placeholder */}
           <div className="grid grid-cols-2 gap-2">
             {[1, 2, 3, 4].map((i) => (
@@ -134,26 +114,48 @@ export default function LocationDetail({
             </div>
           </div>
 
-          {/* Actions */}
-          <div className="flex flex-wrap gap-2 sm:gap-3 pt-4 border-t border-gray-200">
-            <button
-              className="flex-1 min-w-[140px] px-4 py-3 bg-primary-600 text-white rounded-lg font-semibold hover:bg-primary-700 transition-all flex items-center justify-center gap-2 focus:outline-none focus:ring-2 focus:ring-primary-600 focus:ring-offset-2 min-h-[44px] text-sm sm:text-base"
-              aria-label="Play audio guide for this location"
-            >
-              <Play className="w-4 h-4 sm:w-5 sm:h-5" aria-hidden="true" />
-              <span className="hidden sm:inline">Play Audio Guide</span>
-              <span className="sm:hidden">Play</span>
-            </button>
-            <button className="px-3 sm:px-4 py-3 bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200 transition-all min-h-[44px] min-w-[44px] flex items-center justify-center" aria-label="Bookmark location">
-              <Bookmark className="w-5 h-5" />
-            </button>
-            <button className="px-3 sm:px-4 py-3 bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200 transition-all min-h-[44px] min-w-[44px] flex items-center justify-center" aria-label="Share location">
-              <Share2 className="w-5 h-5" />
-            </button>
-            <button className="px-3 sm:px-4 py-3 bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200 transition-all min-h-[44px] min-w-[44px] flex items-center justify-center" aria-label="Edit location">
-              <Edit className="w-5 h-5" />
-            </button>
-          </div>
+        {/* Actions */}
+        <div className="flex flex-wrap gap-2 sm:gap-3 pt-4 border-t border-gray-200">
+          <Button
+            onClick={() => setShowAudioGuide(true)}
+            icon={<Play className="w-4 h-4 sm:w-5 sm:h-5" />}
+            className="flex-1 min-w-[140px]"
+            aria-label="Play audio guide for this location"
+          >
+            <span className="hidden sm:inline">Play Audio Guide</span>
+            <span className="sm:hidden">Play</span>
+          </Button>
+          <Button
+            onClick={() => {
+              setIsBookmarked(!isBookmarked)
+              alert(isBookmarked ? 'Removed from bookmarks' : 'Saved to bookmarks')
+            }}
+            variant={isBookmarked ? 'primary' : 'secondary'}
+            size="medium"
+            icon={<Bookmark className={`w-5 h-5 ${isBookmarked ? 'fill-current' : ''}`} />}
+            className="min-w-[44px]"
+            aria-label="Bookmark location"
+          />
+          <Button
+            onClick={() => shareLocation(location)}
+            variant="secondary"
+            size="medium"
+            icon={<Share2 className="w-5 h-5" />}
+            className="min-w-[44px]"
+            aria-label="Share location"
+          />
+          <Button
+            onClick={() => {
+              const newNote = prompt('Edit location notes:', note)
+              if (newNote !== null) setNote(newNote)
+            }}
+            variant="secondary"
+            size="medium"
+            icon={<Edit className="w-5 h-5" />}
+            className="min-w-[44px]"
+            aria-label="Edit location"
+          />
+        </div>
 
           {/* Notes Section */}
           <div>
@@ -161,13 +163,24 @@ export default function LocationDetail({
               Add Note
             </label>
             <textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-600 focus:border-transparent"
               rows={3}
               placeholder="Add your personal notes about this location..."
             />
+            {note && (
+              <button
+                onClick={() => {
+                  alert('Note saved!')
+                }}
+                className="mt-2 px-4 py-2 bg-primary-600 text-white rounded-lg font-medium hover:bg-primary-700 transition-all"
+              >
+                Save Note
+              </button>
+            )}
           </div>
-        </div>
-      </m.div>
-    </m.div>
+      </div>
+    </Modal>
   )
 }

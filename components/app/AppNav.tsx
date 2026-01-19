@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { MapPin, Home, Map, Users, Compass, Menu, X, Calendar } from 'lucide-react'
+import { MapPin, Home, Map, Users, Compass, Menu, X, Calendar, Shield, Navigation } from 'lucide-react'
 import { useState } from 'react'
 
 export default function AppNav() {
@@ -15,7 +15,11 @@ export default function AppNav() {
     { href: '/app/map', label: 'Map', icon: Map },
     { href: '/app/groups', label: 'Groups', icon: Users },
     { href: '/discover', label: 'Discover', icon: Compass },
+    { href: '/discover/locations', label: 'Top Locations', icon: Navigation },
   ]
+
+  // Show admin link if on admin page
+  const showAdminLink = pathname?.startsWith('/admin')
 
   // Don't show nav on onboarding
   if (pathname === '/app') return null
@@ -50,6 +54,18 @@ export default function AppNav() {
                 </Link>
               )
             })}
+            <Link
+              href="/admin"
+              className={`px-4 py-2 rounded-lg font-medium transition-all flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-primary-600 focus:ring-offset-2 ${
+                showAdminLink
+                  ? 'bg-primary-600 text-white'
+                  : 'text-gray-700 hover:bg-gray-100'
+              }`}
+              aria-current={showAdminLink ? 'page' : undefined}
+            >
+              <Shield className="w-4 h-4" aria-hidden="true" />
+              Admin
+            </Link>
           </div>
 
           {/* Mobile Menu Button */}
@@ -90,6 +106,18 @@ export default function AppNav() {
                 </Link>
               )
             })}
+            <Link
+              href="/admin"
+              onClick={() => setMobileMenuOpen(false)}
+              className={`block px-4 py-3 rounded-lg font-medium transition-all flex items-center gap-2 ${
+                showAdminLink
+                  ? 'bg-primary-600 text-white'
+                  : 'text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              <Shield className="w-4 h-4" />
+              Admin
+            </Link>
           </div>
         )}
       </div>

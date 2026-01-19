@@ -43,8 +43,10 @@ export default function Footer() {
                       href={link.href}
                       onClick={(e) => {
                         e.preventDefault()
-                        const element = document.querySelector(link.href)
-                        element?.scrollIntoView({ behavior: 'smooth' })
+                        if (typeof document !== 'undefined') {
+                          const element = document.querySelector(link.href)
+                          element?.scrollIntoView({ behavior: 'smooth' })
+                        }
                       }}
                       className="hover:text-primary-400 transition-colors cursor-pointer"
                     >

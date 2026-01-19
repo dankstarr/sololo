@@ -3,6 +3,7 @@
 import { m } from 'framer-motion'
 import { Check, Sparkles } from 'lucide-react'
 import Link from 'next/link'
+import appConfig from '@/config/app.config'
 
 export default function Pricing() {
   const plans = [
@@ -49,15 +50,32 @@ export default function Pricing() {
           {plans.map((plan, index) => (
             <m.div
               key={index}
-              className={`relative bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all p-6 sm:p-8 border-2 ${
+              className={`relative bg-white rounded-2xl shadow-xl hover:shadow-2xl transition-all p-6 sm:p-8 border-2 z-10 ${
                 plan.popular
                   ? 'border-primary-600 md:scale-105'
-                  : 'border-gray-200'
+                  : 'border-gray-300'
               }`}
-              initial={{ opacity: 0, y: 20 }}
+              style={{ 
+                backgroundColor: '#FFFFFF', 
+                borderColor: plan.popular ? '#2D5A27' : '#D1D5DB',
+                boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+                position: 'relative',
+                zIndex: 10
+              }}
+              initial={{ opacity: 1, y: 0 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: '-50px' }}
               transition={{ duration: 0.4, delay: index * 0.1 }}
+              style={{ 
+                ...{ 
+                  backgroundColor: '#FFFFFF', 
+                  borderColor: plan.popular ? '#2D5A27' : '#D1D5DB',
+                  boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+                  position: 'relative',
+                  zIndex: 10
+                },
+                opacity: 1 
+              }}
             >
               {plan.popular && (
                 <div className="absolute -top-4 left-1/2 transform -translate-x-1/2 bg-primary-600 text-white px-4 py-1 rounded-full text-sm font-semibold flex items-center gap-1">

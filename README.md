@@ -144,7 +144,7 @@ The app can be deployed to any platform that supports Next.js:
 
 ## 📊 Performance
 
-See [PERFORMANCE.md](./PERFORMANCE.md) for detailed optimization information.
+See [Performance Guide](./docs/guides/PERFORMANCE.md) for detailed optimization information.
 
 Expected Lighthouse scores:
 - Performance: 90-100

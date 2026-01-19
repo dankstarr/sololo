@@ -5,41 +5,31 @@ import { useSearchParams } from 'next/navigation'
 import { m } from 'framer-motion'
 import { Users, Calendar, MapPin, ArrowRight, Plus, MessageCircle, ArrowLeft } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-
-interface Group {
-  id: string
-  destination: string
-  startDate: string
-  endDate: string
-  memberCount: number
-  maxMembers: number
-  description: string
-}
+import { sampleGroups } from '@/config/sample-data'
+import { useAppStore } from '@/store/useAppStore'
+import { Group } from '@/types'
 
 export default function GroupDiscovery() {
   const searchParams = useSearchParams()
   const router = useRouter()
+  const { groups: storeGroups, setGroups, setCurrentGroup, addGroup, currentTrip } = useAppStore()
   const action = searchParams.get('action')
-  const [groups, setGroups] = useState<Group[]>([
-    {
-      id: '1',
-      destination: 'Tokyo, Japan',
-      startDate: '2024-03-15',
-      endDate: '2024-03-20',
-      memberCount: 3,
-      maxMembers: 6,
-      description: 'Exploring temples, food markets, and modern districts',
-    },
-    {
-      id: '2',
-      destination: 'Tokyo, Japan',
-      startDate: '2024-03-18',
-      endDate: '2024-03-22',
-      memberCount: 2,
-      maxMembers: 4,
-      description: 'Art and culture focused trip',
-    },
-  ])
+  
+  // Initialize groups from store or sample data
+  useEffect(() => {
+    if (storeGroups.length === 0) {
+      const initialGroups = sampleGroups.map((group) => ({
+        ...group,
+        description: `Group exploring ${group.destination} with interests in ${group.interests?.join(', ') || 'various'}`,
+      }))
+      setGroups(initialGroups)
+    }
+  }, [storeGroups.length, setGroups])
+  
+  const groups = storeGroups.length > 0 ? storeGroups : sampleGroups.map((group) => ({
+    ...group,
+    description: `Group exploring ${group.destination} with interests in ${group.interests?.join(', ') || 'various'}`,
+  }))
 
   if (action === 'create') {
     return (
@@ -83,15 +73,30 @@ export default function GroupDiscovery() {
             <div className="flex gap-4">
               <button
                 onClick={() => router.push('/app/groups')}
-                className="px-6 py-3 bg-primary-600 text-white rounded-lg font-semibold hover:bg-primary-700 transition-all"
-              >
-                Create Group
-              </button>
-              <button
-                onClick={() => router.push('/app/groups')}
                 className="px-6 py-3 bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200 transition-all"
               >
                 Cancel
+              </button>
+              <button
+                onClick={() => {
+                  // Create new group from form data
+                  const newGroup: Group = {
+                    id: `group-${Date.now()}`,
+                    destination: currentTrip?.destination || 'Tokyo, Japan',
+                    startDate: currentTrip?.dates.start || new Date().toISOString().split('T')[0],
+                    endDate: currentTrip?.dates.end || new Date().toISOString().split('T')[0],
+                    memberCount: 1,
+                    maxMembers: 10,
+                    interests: currentTrip?.interests || [],
+                    description: `Group exploring ${currentTrip?.destination || 'Tokyo, Japan'}`,
+                  }
+                  addGroup(newGroup)
+                  setCurrentGroup(newGroup)
+                  router.push(`/app/groups/${newGroup.id}/chat`)
+                }}
+                className="px-6 py-3 bg-primary-600 text-white rounded-lg font-semibold hover:bg-primary-700 transition-all flex items-center gap-2"
+              >
+                Create Group
               </button>
             </div>
           </div>
@@ -182,7 +187,10 @@ export default function GroupDiscovery() {
                     </div>
                     <p className="text-gray-700 mb-4">{group.description}</p>
                     <button
-                      onClick={() => router.push(`/app/groups/${group.id}/chat`)}
+                      onClick={() => {
+                        setCurrentGroup(group)
+                        router.push(`/app/groups/${group.id}/chat`)
+                      }}
                       className="px-6 py-2 bg-primary-600 text-white rounded-lg font-semibold hover:bg-primary-700 transition-all flex items-center gap-2"
                     >
                       Join Group

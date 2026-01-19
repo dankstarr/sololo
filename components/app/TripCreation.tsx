@@ -9,7 +9,6 @@ import {
   Heart,
   Navigation,
   Gauge,
-  Wheelchair,
   Users,
   Search,
   ArrowRight,
@@ -18,10 +17,11 @@ import {
   AlertCircle,
 } from 'lucide-react'
 import { useAppStore } from '@/store/useAppStore'
+import WelcomeBanner from './WelcomeBanner'
 
 export default function TripCreation() {
   const router = useRouter()
-  const { itineraryCount, isPro, checkLimit, incrementItineraryCount } = useAppStore()
+  const { itineraryCount, isPro, checkLimit, incrementItineraryCount, setCurrentTrip } = useAppStore()
   const [formData, setFormData] = useState({
     destination: '',
     days: '',
@@ -51,7 +51,7 @@ export default function TripCreation() {
     }))
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
     // Check if user has reached the free limit
@@ -60,13 +60,33 @@ export default function TripCreation() {
       return
     }
     
-    // In a real app, this would generate locations via AI
-    incrementItineraryCount()
-    router.push('/app/locations')
+    // Save trip data to store
+    setCurrentTrip({
+      destination: formData.destination,
+      days: formData.days,
+      dates: formData.dates,
+      interests: formData.interests,
+      travelMode: formData.travelMode as 'walking' | 'driving' | 'mixed',
+      pace: formData.pace as 'relaxed' | 'balanced' | 'packed',
+      accessibility: formData.accessibility,
+    })
+    
+    // Generate locations via Gemini API
+    try {
+      // This will be handled in LocationSelection component
+      incrementItineraryCount()
+      router.push('/app/locations')
+    } catch (error) {
+      console.error('Error generating itinerary:', error)
+      // Fallback to default locations
+      incrementItineraryCount()
+      router.push('/app/locations')
+    }
   }
 
   return (
     <div className="max-w-2xl mx-auto">
+      <WelcomeBanner />
       <div className="mb-8">
         <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">
           Plan Your Trip
@@ -258,7 +278,7 @@ export default function TripCreation() {
                 htmlFor="accessibility"
                 className="flex items-center gap-2 text-gray-700 font-medium cursor-pointer"
               >
-                <Wheelchair className="w-5 h-5 text-primary-600" />
+                <span className="w-5 h-5 text-primary-600 flex items-center justify-center" aria-label="Accessibility">♿</span>
                 Accessibility needs
               </label>
             </div>
@@ -306,7 +326,7 @@ export default function TripCreation() {
                   <X className="w-5 h-5 text-gray-600" />
                 </button>
               </div>
-            </motion.div>
+            </m.div>
           )}
 
           {/* Free Usage Counter */}

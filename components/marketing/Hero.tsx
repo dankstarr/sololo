@@ -3,8 +3,22 @@
 import { m } from 'framer-motion'
 import Link from 'next/link'
 import { ArrowRight, MapPin } from 'lucide-react'
+import appConfig from '@/config/app.config'
 
 export default function Hero() {
+  // Safety check for hero data
+  if (!appConfig.hero) {
+    return (
+      <section className="relative min-h-screen flex items-center justify-center overflow-hidden bg-gradient-to-br from-primary-50 via-white to-primary-50">
+        <div className="container mx-auto px-4 sm:px-6 relative z-10 text-center">
+          <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-8xl font-bold text-gray-900 mb-4 sm:mb-6">
+            Loading...
+          </h1>
+        </div>
+      </section>
+    )
+  }
+
   return (
     <section className="relative min-h-screen flex items-center justify-center overflow-hidden bg-gradient-to-br from-primary-50 via-white to-primary-50">
       {/* Animated Map Background */}
@@ -25,7 +39,7 @@ export default function Hero() {
               strokeDashoffset: 0,
             }}
             transition={{
-              duration: 3,
+              duration: appConfig.animations.routeDrawDuration / 1000,
               repeat: Infinity,
               repeatType: 'reverse',
             }}
@@ -39,7 +53,7 @@ export default function Hero() {
               y: [0, -10, 0],
             }}
             transition={{
-              duration: 2,
+              duration: appConfig.animations.pinBounceDuration / 1000,
               repeat: Infinity,
               ease: 'easeInOut',
             }}
@@ -80,30 +94,29 @@ export default function Hero() {
       <div className="container mx-auto px-4 sm:px-6 relative z-10 text-center">
         <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-8xl font-bold text-gray-900 mb-4 sm:mb-6 leading-tight">
           <span className="inline-block hover:animate-glitch">
-            Your tourist friend
+            {appConfig.hero.headline}
           </span>
           <br />
-          <span className="text-primary-600">for smarter, social travel</span>
+          <span className="text-primary-600">{appConfig.hero.headlineHighlight}</span>
         </h1>
 
         <p className="text-base sm:text-lg md:text-xl lg:text-2xl text-gray-600 mb-8 sm:mb-12 max-w-3xl mx-auto px-4">
-          AI itineraries, circular routes, audio guides, and people to explore
-          with.
+          {appConfig.hero.subheadline}
         </p>
 
         <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center items-center px-4">
           <Link
-            href="/app"
+            href={appConfig.hero.primaryCTA.href}
             className="w-full sm:w-auto px-6 sm:px-8 py-3 sm:py-4 bg-primary-600 text-white rounded-xl font-semibold text-base sm:text-lg hover:bg-primary-700 transition-all hover:scale-105 active:scale-95 shadow-xl hover:shadow-2xl flex items-center justify-center gap-2 group min-h-[44px]"
           >
-            Plan Your Trip
+            {appConfig.hero.primaryCTA.text}
             <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
           </Link>
           <Link
-            href="/discover"
+            href={appConfig.hero.secondaryCTA.href}
             className="w-full sm:w-auto px-6 sm:px-8 py-3 sm:py-4 bg-white text-primary-600 border-2 border-primary-600 rounded-xl font-semibold text-base sm:text-lg hover:bg-primary-50 transition-all hover:scale-105 active:scale-95 shadow-lg hover:shadow-xl min-h-[44px] flex items-center justify-center"
           >
-            Explore Trips
+            {appConfig.hero.secondaryCTA.text}
           </Link>
         </div>
       </div>

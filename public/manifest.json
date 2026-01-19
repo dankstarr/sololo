@@ -1,0 +1,10 @@
+{
+  "name": "Sololo - AI Travel Companion",
+  "short_name": "Sololo",
+  "description": "AI-powered travel companion for smarter, social travel",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2D5A27",
+  "icons": []
+}

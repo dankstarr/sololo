@@ -16,26 +16,26 @@ import {
   Wifi,
   WifiOff,
   ArrowLeft,
+  Share2,
+  Copy,
+  Check,
 } from 'lucide-react'
-
-interface Day {
-  id: string
-  day: number
-  locations: string[]
-  estimatedTime: string
-  distance: string
-  pace: 'relaxed' | 'balanced' | 'rushed'
-  notes: string
-  budget: string
-}
+import { useAppStore } from '@/store/useAppStore'
+import { Day } from '@/types'
 
 export default function ItineraryOverview() {
   const router = useRouter()
+  const { itinerary, currentTrip, selectedLocations, setItinerary } = useAppStore()
   const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set(['1']))
   const [isOffline, setIsOffline] = useState(false)
   const [downloadedItems, setDownloadedItems] = useState<Set<string>>(new Set())
+  const [isSharing, setIsSharing] = useState(false)
+  const [shareUrl, setShareUrl] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
+  const [editingDayId, setEditingDayId] = useState<string | null>(null)
 
-  const days: Day[] = [
+  // Use itinerary from store or fallback to default
+  const days: Day[] = itinerary.length > 0 ? itinerary : [
     {
       id: '1',
       day: 1,
@@ -80,6 +80,110 @@ export default function ItineraryOverview() {
     })
   }
 
+  const handleDownload = () => {
+    if (!currentTrip && itinerary.length === 0) {
+      alert('Nothing to download yet. Please generate an itinerary first.')
+      return
+    }
+
+    const data = {
+      trip: currentTrip,
+      itinerary: days,
+      exportedAt: new Date().toISOString(),
+    }
+
+    try {
+      const blob = new Blob([JSON.stringify(data, null, 2)], {
+        type: 'application/json',
+      })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      const destinationSlug =
+        currentTrip?.destination
+          ?.toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-|-$/g, '') || 'itinerary'
+
+      a.href = url
+      a.download = `${destinationSlug}-${currentTrip?.days || days.length}-days-itinerary.json`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+
+      // Mark as downloaded / offline-ready in the UI
+      setDownloadedItems(new Set(['itinerary']))
+      setIsOffline(true)
+    } catch (error) {
+      console.error('Failed to download itinerary:', error)
+      alert('Failed to download itinerary. Please try again.')
+    }
+  }
+
+  const moveLocation = (dayId: string, index: number, direction: 'up' | 'down') => {
+    const source = itinerary.length > 0 ? itinerary : days
+    const updated = source.map((d) => ({ ...d, locations: [...(d.locations || [])] }))
+    const dayIndex = updated.findIndex((d) => d.id === dayId)
+    if (dayIndex === -1) return
+
+    const locs = updated[dayIndex].locations || []
+    const newIndex = direction === 'up' ? index - 1 : index + 1
+    if (newIndex < 0 || newIndex >= locs.length) return
+
+    const newLocs = [...locs]
+    ;[newLocs[index], newLocs[newIndex]] = [newLocs[newIndex], newLocs[index]]
+    updated[dayIndex] = { ...updated[dayIndex], locations: newLocs }
+    setItinerary(updated)
+  }
+
+  const handleShare = async () => {
+    if (!currentTrip || itinerary.length === 0) {
+      alert('Please create an itinerary first')
+      return
+    }
+
+    setIsSharing(true)
+    try {
+      const response = await fetch('/api/share', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          trip: currentTrip,
+          locations: selectedLocations,
+          itinerary: days,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to share itinerary')
+      }
+
+      const data = await response.json()
+      const fullUrl = `${window.location.origin}${data.shareUrl}`
+      setShareUrl(fullUrl)
+    } catch (error) {
+      console.error('Error sharing itinerary:', error)
+      alert('Failed to share itinerary. Please try again.')
+    } finally {
+      setIsSharing(false)
+    }
+  }
+
+  const handleCopyLink = async () => {
+    if (!shareUrl) return
+
+    try {
+      await navigator.clipboard.writeText(shareUrl)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch (error) {
+      console.error('Failed to copy link:', error)
+      alert('Failed to copy link. Please copy it manually.')
+    }
+  }
+
   return (
     <div className="container mx-auto px-6 py-8">
       <div className="max-w-4xl mx-auto">
@@ -98,6 +202,11 @@ export default function ItineraryOverview() {
             <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">
               Your Itinerary
             </h1>
+            {currentTrip && (
+              <p className="text-lg text-gray-600">
+                {currentTrip.destination} • {currentTrip.days} days
+              </p>
+            )}
             <p className="text-gray-600">Tokyo, Japan • 3 days</p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
@@ -115,14 +224,19 @@ export default function ItineraryOverview() {
               )}
             </div>
             <button
-              onClick={() => {
-                setDownloadedItems(new Set(['routes', 'maps', 'audio']))
-                alert('Downloading routes, maps, and audio guides for offline use...')
-              }}
+              onClick={handleDownload}
               className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200 transition-all flex items-center gap-2"
             >
               <Download className="w-4 h-4" />
               Download
+            </button>
+            <button
+              onClick={handleShare}
+              disabled={isSharing}
+              className="px-4 py-2 bg-secondary text-primary rounded-lg font-semibold hover:bg-secondary/80 transition-all flex items-center gap-2 disabled:opacity-50"
+            >
+              <Share2 className="w-4 h-4" />
+              {isSharing ? 'Sharing...' : 'Share'}
             </button>
             <button
               onClick={() => router.push('/app/map')}
@@ -133,6 +247,33 @@ export default function ItineraryOverview() {
             </button>
           </div>
         </div>
+
+        {shareUrl && (
+          <div className="mb-6 bg-primary-50 border border-primary-200 rounded-lg p-4">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-primary mb-1">Shareable Link Created!</p>
+                <p className="text-xs text-gray-600 break-all">{shareUrl}</p>
+              </div>
+              <button
+                onClick={handleCopyLink}
+                className="px-4 py-2 bg-primary text-white rounded-lg font-semibold hover:bg-primary-600 transition-all flex items-center gap-2 shrink-0"
+              >
+                {copied ? (
+                  <>
+                    <Check className="w-4 h-4" />
+                    Copied!
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-4 h-4" />
+                    Copy
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        )}
 
         {downloadedItems.size > 0 && (
           <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4">
@@ -212,7 +353,7 @@ export default function ItineraryOverview() {
                           Locations
                         </h4>
                         <ul className="space-y-2">
-                          {day.locations.map((location, idx) => (
+                          {day.locations?.map((location, idx) => (
                             <li
                               key={idx}
                               className="flex items-center gap-2 text-gray-700"
@@ -221,6 +362,26 @@ export default function ItineraryOverview() {
                                 {idx + 1}
                               </span>
                               {location}
+                              {editingDayId === day.id && (
+                                <div className="flex items-center gap-1 ml-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => moveLocation(day.id, idx, 'up')}
+                                    disabled={idx === 0}
+                                    className="p-1 rounded-full bg-gray-100 hover:bg-gray-200 disabled:opacity-40"
+                                  >
+                                    <ChevronUp className="w-3 h-3" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => moveLocation(day.id, idx, 'down')}
+                                    disabled={idx === (day.locations?.length || 0) - 1}
+                                    className="p-1 rounded-full bg-gray-100 hover:bg-gray-200 disabled:opacity-40"
+                                  >
+                                    <ChevronDown className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              )}
                             </li>
                           ))}
                         </ul>
@@ -245,9 +406,15 @@ export default function ItineraryOverview() {
                       </div>
 
                       <div className="flex gap-3">
-                        <button className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition-all flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setEditingDayId((current) => (current === day.id ? null : day.id))
+                          }
+                          className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition-all flex items-center gap-2"
+                        >
                           <Edit className="w-4 h-4" />
-                          Edit Order
+                          {editingDayId === day.id ? 'Done' : 'Edit Order'}
                         </button>
                       </div>
                     </div>

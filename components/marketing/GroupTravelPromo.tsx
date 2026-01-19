@@ -3,8 +3,20 @@
 import { m } from 'framer-motion'
 import Link from 'next/link'
 import { Users, ArrowRight } from 'lucide-react'
+import appConfig from '@/config/app.config'
 
 export default function GroupTravelPromo() {
+  // Safety check for groupPromo data
+  if (!appConfig.groupPromo) {
+    return (
+      <section className="py-12 sm:py-16 bg-primary-600">
+        <div className="container mx-auto px-4 sm:px-6">
+          <p className="text-center text-white">Loading...</p>
+        </div>
+      </section>
+    )
+  }
+
   return (
     <section className="py-12 sm:py-16 bg-primary-600">
       <div className="container mx-auto px-4 sm:px-6">
@@ -21,19 +33,17 @@ export default function GroupTravelPromo() {
             </div>
             <div className="flex-1 text-center md:text-left">
               <h3 className="text-3xl font-bold text-gray-900 mb-2">
-                Traveling solo? Find people going to the same place.
+                {appConfig.groupPromo.headline}
               </h3>
               <p className="text-gray-600 text-lg">
-                Connect with fellow travelers, share experiences, and explore
-                together. Groups auto-expire after trip dates, so you always
-                meet people with similar timing.
+                {appConfig.groupPromo.description}
               </p>
             </div>
             <Link
-              href="/app/groups"
+              href={appConfig.groupPromo.cta.href}
               className="w-full md:w-auto px-6 py-3 bg-primary-600 text-white rounded-lg font-semibold hover:bg-primary-700 transition-all hover:scale-105 active:scale-95 shadow-lg hover:shadow-xl flex items-center justify-center gap-2 group min-h-[44px]"
             >
-              Explore Groups
+              {appConfig.groupPromo.cta.text}
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </Link>
           </div>
