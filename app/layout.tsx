@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import './globals.css'
 import SkipLink from '@/components/common/SkipLink'
+import { Analytics } from '@vercel/analytics/react'
 
 export const metadata: Metadata = {
   title: {
@@ -54,6 +55,7 @@ export default function RootLayout({
       <body className="font-sans antialiased">
         <SkipLink />
         {children}
+        <Analytics />
       </body>
     </html>
   )
