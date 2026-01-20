@@ -561,6 +561,7 @@ export default function ItineraryOverview() {
           removeLocation={removeLocation}
           addLocationToDay={addLocationToDay}
         />
+        </div>
         {/* Sidebar: Collaborators and Edit History / Trip Insights */}
         <div className="lg:col-span-1 space-y-6">
           {currentShareId ? (
