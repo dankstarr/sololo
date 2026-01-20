@@ -1,4 +1,4 @@
-import LocationSelection from '@/components/app/LocationSelection'
+import LocationSelection from '@/components/app/planner/LocationSelection'
 
 export default function LocationsPage() {
   return (

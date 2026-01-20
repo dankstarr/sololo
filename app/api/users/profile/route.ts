@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase/admin'
-import { supabaseCache, CACHE_TTL } from '@/lib/utils/supabase-cache'
+import { supabaseCache, CACHE_TTL } from '@/lib/utils/cache'
 import { withAuth, verifyOwnership } from '@/lib/auth/server'
 import { secureRoute, validateRequestBody, validators } from '@/lib/security/middleware'
 
@@ -10,7 +10,10 @@ async function handleGet(req: NextRequest, auth: { user: any; session: any }) {
   const requestedUserId = searchParams.get('userId')
   
   // Require authentication
-  const currentUserId = auth.user.id
+  const currentUserId = auth?.user?.id
+  if (!currentUserId) {
+    return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+  }
   
   // Users can only view their own profile (unless admin)
   const userId = requestedUserId || currentUserId
@@ -19,7 +22,7 @@ async function handleGet(req: NextRequest, auth: { user: any; session: any }) {
   if (userId !== currentUserId) {
     // Check if user is admin (for admin viewing other profiles)
     const adminEmails = process.env.ADMIN_EMAILS?.split(',') || []
-    const isAdmin = adminEmails.includes(auth.user.email || '')
+    const isAdmin = adminEmails.includes(auth?.user?.email || '')
     
     if (!isAdmin) {
       return NextResponse.json(
@@ -93,11 +96,16 @@ async function handleGet(req: NextRequest, auth: { user: any; session: any }) {
 async function handlePost(req: NextRequest, auth: { user: any; session: any }) {
   try {
     const body = await req.json()
-    const requestedUserId = body.userId || auth.user.id
+    const currentUserId = auth?.user?.id
+    if (!currentUserId) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+    }
+
+    const requestedUserId = body.userId || currentUserId
     const { userId, ...updates } = body
 
     // Users can only update their own profile
-    if (requestedUserId !== auth.user.id) {
+    if (requestedUserId !== currentUserId) {
       return NextResponse.json(
         { error: 'You can only update your own profile' },
         { status: 403 }
@@ -183,10 +191,14 @@ async function handlePost(req: NextRequest, auth: { user: any; session: any }) {
 async function handleDelete(req: NextRequest, auth: { user: any; session: any }) {
   try {
     const searchParams = req.nextUrl.searchParams
-    const requestedUserId = searchParams.get('userId') || auth.user.id
+    const currentUserId = auth?.user?.id
+    if (!currentUserId) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+    }
+    const requestedUserId = searchParams.get('userId') || currentUserId
 
     // Users can only delete their own account
-    if (requestedUserId !== auth.user.id) {
+    if (requestedUserId !== currentUserId) {
       return NextResponse.json(
         { error: 'You can only delete your own account' },
         { status: 403 }

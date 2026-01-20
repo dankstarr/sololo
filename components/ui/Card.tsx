@@ -1,7 +1,7 @@
 'use client'
 
 import { ReactNode, HTMLAttributes } from 'react'
-import { cn } from '@/lib/utils/cn'
+import { cn } from '@/lib/utils/ui/cn'
 
 interface CardProps extends HTMLAttributes<HTMLDivElement> {
   children: ReactNode

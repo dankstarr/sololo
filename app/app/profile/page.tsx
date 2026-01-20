@@ -14,7 +14,7 @@ import {
   syncSavedLocationsFromDB,
   syncUserTripsFromDB,
   updateUserProfileInDB,
-} from '@/lib/utils/user-sync'
+} from '@/lib/utils/user'
 import { useAuth } from '@/hooks'
 
 export default function ProfilePage() {
@@ -561,9 +561,9 @@ export default function ProfilePage() {
   }
 
   if (isLoading) {
-    return (
-      <main className="min-h-screen bg-background">
-        <div className="container mx-auto px-4 sm:px-6 py-8 sm:py-12">
+  return (
+    <main className="min-h-screen bg-background">
+      <div className="container mx-auto px-4 sm:px-6 py-8 sm:py-12">
           <div className="flex items-center justify-center min-h-[400px]">
             <p className="text-gray-600">Loading profile...</p>
           </div>
@@ -622,10 +622,10 @@ export default function ProfilePage() {
               <Settings className="w-4 h-4" />
               {showSettings ? 'Hide Settings' : 'Settings'}
             </Button>
-            <Badge className="bg-primary text-white flex items-center gap-1">
-              <Sparkles className="w-3 h-3" />
-              Profile
-            </Badge>
+          <Badge className="bg-primary text-white flex items-center gap-1">
+            <Sparkles className="w-3 h-3" />
+            Profile
+          </Badge>
           </div>
         </div>
         </div>
@@ -884,14 +884,14 @@ export default function ProfilePage() {
                       return (
                         <Card key={item.id} className="p-3 flex items-center justify-between gap-2 relative">
                           <div className="flex-1">
-                            <p className="text-sm font-semibold text-gray-900">
-                              {item.title}
-                            </p>
-                            <p className="text-xs text-gray-600">
-                              {item.destination} • {item.duration}
+                          <p className="text-sm font-semibold text-gray-900">
+                            {item.title}
+                          </p>
+                          <p className="text-xs text-gray-600">
+                            {item.destination} • {item.duration}
                               {isUserTrip && <span className="ml-2 text-primary">• My Trip</span>}
-                            </p>
-                          </div>
+                          </p>
+                        </div>
                           <div className="flex items-center gap-2">
                             <Button
                               variant={isLiked ? 'primary' : 'outline'}
@@ -905,9 +905,9 @@ export default function ProfilePage() {
                               <Heart className={`w-3 h-3 ${isLiked ? 'fill-current' : ''}`} />
                             </Button>
                             <div className="relative">
-                              <Button
-                                variant="outline"
-                                size="small"
+                        <Button
+                          variant="outline"
+                          size="small"
                                 onClick={(e) => {
                                   e.stopPropagation()
                                   setOpenMenuId(isMenuOpen ? null : menuId)

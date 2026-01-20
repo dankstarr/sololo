@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { useRouter } from 'next/navigation'
-import TripCreation from '@/components/app/TripCreation'
+import TripCreation from '@/components/app/planner/TripCreation'
 import { useAppStore } from '@/store/useAppStore'
 
 // Mock next/navigation

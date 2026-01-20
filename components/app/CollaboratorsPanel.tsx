@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { Users, UserPlus, X, Crown, Edit, Eye, Mail } from 'lucide-react'
 import { Collaborator } from '@/types'
 import { useAppStore } from '@/store/useAppStore'
-import { trackedFetch } from '@/lib/utils/tracked-fetch'
+import { trackedFetch } from '@/lib/utils/api/tracked-fetch'
 import Button from '@/components/ui/Button'
 
 interface CollaboratorsPanelProps {

@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { ArrowLeft, Clock, Route, DollarSign, MapPin } from 'lucide-react'
 import Footer from '@/components/marketing/Footer'
 import { useAppStore } from '@/store/useAppStore'
-import { trackedFetch } from '@/lib/utils/tracked-fetch'
+import { trackedFetch } from '@/lib/utils/api/tracked-fetch'
 
 interface SharedItinerary {
   id: string

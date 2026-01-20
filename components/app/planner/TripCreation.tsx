@@ -16,7 +16,7 @@ import {
   AlertCircle,
 } from 'lucide-react'
 import { useAppStore } from '@/store/useAppStore'
-import WelcomeBanner from './WelcomeBanner'
+import WelcomeBanner from '../WelcomeBanner'
 import ThemeSelector from '@/components/common/ThemeSelector'
 import AddressAutocomplete from '@/components/common/AddressAutocomplete'
 import { getThemeById } from '@/config/themes'

@@ -8,7 +8,14 @@ import { useRouter } from 'next/navigation'
 const isSupabaseConfigured = () => {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-  return !!(url && key && url !== 'https://placeholder.supabase.co')
+  if (!url || !key) return false
+  if (url === 'https://placeholder.supabase.co') return false
+  try {
+    const u = new URL(url)
+    return u.protocol === 'http:' || u.protocol === 'https:'
+  } catch {
+    return false
+  }
 }
 
 export function useAuth() {

@@ -1,4 +1,4 @@
-import { recordInternalApiCall } from '@/lib/utils/api-usage'
+import { recordInternalApiCall } from '@/lib/utils/api/usage'
 
 function toUrlString(input: RequestInfo | URL): string {
   if (typeof input === 'string') return input

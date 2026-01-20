@@ -1,4 +1,4 @@
-import ItineraryOverview from '@/components/app/ItineraryOverview'
+import ItineraryOverview from '@/components/app/planner/ItineraryOverview'
 
 export default function ItineraryPage() {
   return (

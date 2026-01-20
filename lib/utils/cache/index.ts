@@ -81,3 +81,6 @@ if (typeof window !== 'undefined') {
     mapsCache.cleanup()
   }, 10 * 60 * 1000)
 }
+
+// Re-export Supabase cache utilities
+export * from './supabase'

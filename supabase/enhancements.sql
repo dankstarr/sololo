@@ -19,6 +19,9 @@ begin
 end;
 $$ language plpgsql;
 
+-- Ensure all target tables actually have an updated_at column
+alter table public.trips add column if not exists updated_at timestamptz not null default now();
+
 -- Apply triggers to all tables with updated_at
 create trigger update_trips_updated_at before update on public.trips
   for each row execute function update_updated_at_column();

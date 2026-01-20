@@ -25,7 +25,7 @@ import {
   ChevronDown,
   ChevronUp,
 } from 'lucide-react'
-import LocationDetail from './LocationDetail'
+import LocationDetail from '../LocationDetail'
 import { SimpleMap } from '@/components/maps'
 import { FilterPanel, DaySelector, OfflineIndicator } from '@/components/common'
 import { Button, Drawer, DrawerContent, Input } from '@/components/ui'

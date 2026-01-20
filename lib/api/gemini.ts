@@ -1,7 +1,7 @@
 // Gemini API Integration
 import { gemini } from '@/config/gemini'
 import { geminiCache } from '@/lib/utils/cache'
-import { incrementHourlyUsage } from '@/lib/utils/api-usage'
+import { incrementHourlyUsage } from '@/lib/utils/api/usage'
 
 interface GeminiMessage {
   role: 'user' | 'model'

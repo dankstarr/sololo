@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { listSharedItineraries } from '@/lib/shared-itineraries-store'
-import { supabaseCache, CACHE_TTL } from '@/lib/utils/supabase-cache'
+import { supabaseCache, CACHE_TTL } from '@/lib/utils/cache'
 
 export const dynamic = 'force-dynamic'
 

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { History, User, Plus, Trash2, Move, Edit, Users } from 'lucide-react'
 import { EditHistoryEntry } from '@/types'
-import { trackedFetch } from '@/lib/utils/tracked-fetch'
+import { trackedFetch } from '@/lib/utils/api/tracked-fetch'
 
 interface EditHistoryPanelProps {
   itineraryId: string

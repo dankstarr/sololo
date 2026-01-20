@@ -1,6 +1,6 @@
 'use client'
 
-import TripCreation from '@/components/app/TripCreation'
+import TripCreation from '@/components/app/planner/TripCreation'
 import { useAppStore } from '@/store/useAppStore'
 import { getThemeById } from '@/config/themes'
 

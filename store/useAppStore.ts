@@ -7,7 +7,7 @@ import {
   syncSavedItemsFromDB,
   syncUserProfileFromDB,
   updateUserProfileInDB,
-} from '@/lib/utils/user-sync'
+} from '@/lib/utils/user'
 
 interface AppState {
   // User & Subscription

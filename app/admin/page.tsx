@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { getUsageStats, resetUsageStats } from '@/lib/api/gemini'
 import { getMapsUsageStats, resetMapsUsageStats } from '@/lib/api/google-maps'
-import { getInternalApiStats, resetInternalApiStats } from '@/lib/utils/api-usage'
+import { getInternalApiStats, resetInternalApiStats } from '@/lib/utils/api/usage'
 import appConfig from '@/config/app.config'
 import {
   BarChart3,

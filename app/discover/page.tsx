@@ -20,7 +20,7 @@ import { useAppStore } from '@/store/useAppStore'
 import { useRouter } from 'next/navigation'
 import Footer from '@/components/marketing/Footer'
 import { useDebounce } from '@/hooks'
-import { trackedFetch } from '@/lib/utils/tracked-fetch'
+import { trackedFetch } from '@/lib/utils/api/tracked-fetch'
 
 type FilterType = 'all' | 'itinerary' | 'audio-guide' | 'route'
 

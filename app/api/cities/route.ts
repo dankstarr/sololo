@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase/admin'
-import { supabaseCache, CACHE_TTL } from '@/lib/utils/supabase-cache'
+import { supabaseCache, CACHE_TTL } from '@/lib/utils/cache'
 import { withAdmin, withAuth, verifyOwnership } from '@/lib/auth/server'
 
 // GET all cities with their location counts

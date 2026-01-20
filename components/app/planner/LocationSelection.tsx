@@ -17,7 +17,7 @@ import { generateAlternativeLocation as generateAlt, getImageUrl } from '@/lib/u
 import { generateLocationExplanation, generateAlternativeLocation, generateLocationSuggestions, generateLocationsWithExplanations } from '@/lib/api/gemini'
 import { searchPlaces, geocodeAddress } from '@/lib/api/google-maps'
 import { Location, Day, TripFormData } from '@/types'
-import { enrichDayData, enrichTripData } from '@/lib/utils/itinerary-enrichment'
+import { enrichDayData, enrichTripData } from '@/lib/utils/itinerary'
 import { AIReasoningPanel } from '@/components/common'
 import { useAIReasoning } from '@/hooks'
 import { useAppStore } from '@/store/useAppStore'

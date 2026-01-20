@@ -1,7 +1,7 @@
 // Google Maps API Integration
 import { googleMaps } from '@/config/google-maps'
 import { mapsCache } from '@/lib/utils/cache'
-import { incrementHourlyUsage } from '@/lib/utils/api-usage'
+import { incrementHourlyUsage } from '@/lib/utils/api/usage'
 
 interface Location {
   name: string

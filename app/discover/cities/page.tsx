@@ -106,7 +106,9 @@ export default function DiscoverCitiesPage() {
       
       try {
         console.log(`[Discover Cities] Fetching locations for city: ${selectedCity.name} (ID: ${selectedCity.id})`)
-        const res = await fetch(`/api/cities?cityId=${selectedCity.id}`)
+        const res = await fetch(`/api/cities?cityId=${selectedCity.id}`, {
+          cache: 'no-store', // Ensure fresh data from database
+        })
         
         if (res.ok) {
           const data = await res.json()
@@ -463,10 +465,10 @@ export default function DiscoverCitiesPage() {
                       ) : cityLocations.length > 0 ? (
                         <div>
                           <h4 className="font-semibold text-gray-900 mb-3">
-                            Top Locations ({cityLocations.length})
+                            All Locations ({cityLocations.length})
                           </h4>
-                          <div className="space-y-2 max-h-64 overflow-y-auto">
-                            {cityLocations.slice(0, 10).map((loc) => (
+                          <div className="space-y-2 max-h-96 overflow-y-auto">
+                            {cityLocations.map((loc) => (
                               <div
                                 key={loc.id}
                                 className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50"
@@ -497,24 +499,25 @@ export default function DiscoverCitiesPage() {
                               </div>
                             ))}
                           </div>
-                          {cityLocations.length > 10 && (
-                            <p className="text-xs text-gray-500 mt-2 text-center">
-                              +{cityLocations.length - 10} more locations
-                            </p>
-                          )}
                         </div>
-                      ) : selectedCity.locationCount > 0 ? (
+                      ) : selectedCity.locationCount > 0 && !loadingLocations ? (
                         <div className="text-center py-4">
                           <p className="text-sm text-gray-600 mb-2">
-                            Loading locations... ({selectedCity.locationCount} expected)
+                            No locations loaded ({selectedCity.locationCount} expected in database)
                           </p>
-                          <p className="text-xs text-gray-500">
-                            If this persists, try refreshing the page.
+                          <p className="text-xs text-gray-500 mb-3">
+                            Try clicking &quot;View All Locations&quot; to see them on the locations page.
                           </p>
+                          <Link
+                            href={getCityUrl(selectedCity)}
+                            className="text-xs text-primary hover:underline"
+                          >
+                            View All Locations →
+                          </Link>
                         </div>
-                      ) : (
+                      ) : selectedCity.locationCount === 0 ? (
                         <p className="text-sm text-gray-600">No locations saved for this city yet.</p>
-                      )}
+                      ) : null}
 
                       {/* Actions */}
                       <div className="pt-4 border-t border-gray-100 space-y-2">

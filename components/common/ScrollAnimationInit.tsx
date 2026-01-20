@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
-import { setupScrollAnimations } from '@/lib/utils/scroll-animations'
+import { setupScrollAnimations } from '@/lib/utils/ui/scroll-animations'
 
 export default function ScrollAnimationInit() {
   useEffect(() => {
