@@ -1,0 +1,30 @@
+# CodeRabbit configuration for Sololo
+# https://docs.coderabbit.ai/configure-coderabbit
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+
+language: "en-US"
+early_access: false
+
+reviews:
+  profile: "chill"  # Use "assertive" for stricter feedback
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: true
+  review_status: true
+  auto_review:
+    enabled: true
+    incremental_review: true
+    drafts: false
+  # Tools for Next.js/TypeScript project
+  tools:
+    eslint:
+      enabled: true
+    biome:
+      enabled: true
+    markdownlint:
+      enabled: true
+    gitleaks:
+      enabled: true
+
+chat:
+  auto_reply: true

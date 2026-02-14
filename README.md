@@ -202,6 +202,18 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 4. Push to the branch (`git push origin feature/AmazingFeature`)
 5. Open a Pull Request
 
+### CodeRabbit (AI Code Reviews)
+
+This project uses [CodeRabbit](https://coderabbit.ai) for AI-powered PR reviews. Configuration is in `.coderabbit.yaml`.
+
+**To connect CodeRabbit:**
+1. Go to [app.coderabbit.ai/login](https://app.coderabbit.ai/login)
+2. Click **Login with GitHub** and authorize
+3. Select your account/org and choose this repository
+4. Click **Install & Authorize**
+
+**To verify:** Open a pull request — CodeRabbit will automatically review it.
+
 ## 📝 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
